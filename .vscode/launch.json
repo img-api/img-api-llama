@@ -1,0 +1,24 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch main test",
+            "type": "python",
+            "request": "launch",
+            "program": "query_test.py",
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "purpose": ["debug-in-terminal"],
+            "env": {
+                "PYTHONPATH": "${cwd}"
+            },
+            "args": [
+                "lachati.com", "5000",
+            ],
+        },
+    ]
+}
