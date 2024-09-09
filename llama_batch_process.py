@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+
 import fire
 import shutil
 import requests
@@ -11,12 +12,19 @@ from llama_models.llama3_1.api.datatypes import Attachment, URL, UserMessage
 from multi_turn import prompt_to_message, run_main
 
 # Configurable paths
-config_folder = "./DATA/JSON_TO_PROCESS"
+source_folder = "./DATA/JSON_TO_PROCESS"
 processed_folder = "./DATA/PROCESSED"
+failed_folder = "./DATA/FAILED"
 
 # Ensure processed folder exists
+if not os.path.exists(source_folder):
+    os.makedirs(source_folder)
+
 if not os.path.exists(processed_folder):
     os.makedirs(processed_folder)
+
+if not os.path.exists(failed_folder):
+    os.makedirs(failed_folder)
 
 
 def get_oldest_file(folder):
@@ -42,15 +50,19 @@ def callback_url(url, data):
         response = requests.post(url, json=data)
         response.raise_for_status()
         print(f"Callback to {url} successful: {response.status_code}")
+
+        return True
     except requests.exceptions.RequestException as e:
         print(f"Failed to callback {url}: {e}")
+
+    return False
 
 
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
-        # Get the oldest JSON file
+    # Get the oldest JSON file
 
-    json_file = get_oldest_file(config_folder)
+    json_file = get_oldest_file(source_folder)
     if not json_file:
         print("No JSON files to process.")
         return
@@ -85,20 +97,31 @@ def main(host: str, port: int):
         ))
 
     # Add the result to the JSON data
-    data["result"] = str(result)
+    data["result"] = str(result).replace("StepType.inference> ", "")
 
     # Callback with the updated data
-    callback_url(data["callback_url"], data)
+    result_ok = callback_url(data["callback_url"], data)
 
-    # Move the processed file or update its timestamp
+    # Save the updated JSON data back to the same file
     try:
-        shutil.move(
-            json_file,
-            os.path.join(processed_folder, os.path.basename(json_file)))
-        print(f"Processed and moved file: {json_file}")
+        with open(json_file, 'w') as f:
+            json.dump(data, f, indent=4)
+
+        if result_ok:
+            shutil.move(
+                json_file,
+                os.path.join(processed_folder, os.path.basename(json_file)))
+        else:
+            shutil.move(
+                json_file,
+                os.path.join(failed_folder, os.path.basename(json_file)))
+
+        print(f"Result saved to file: {json_file}")
     except Exception as e:
-        print(f"Failed to move file {json_file}: {e}")
-        update_file_timestamp(json_file)
+        print(f"Failed to save result to file {json_file}: {e}")
+        os.remove(json_file)  # Delete the file if it can't be saved
+        print(f"Deleted file due to save error: {json_file}")
+
 
 if __name__ == "__main__":
     fire.Fire(main)
