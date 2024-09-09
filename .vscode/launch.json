@@ -8,7 +8,7 @@
             "name": "Launch main test",
             "type": "python",
             "request": "launch",
-            "program": "query_test.py",
+            "program": "llama_batch_process.py",
             "stopOnEntry": false,
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",

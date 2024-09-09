@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" -d '{"id": "TESTING", "callback_url": "https://gputop.com/api/index/ingest_json", "message": "this is a test, answer to me mother fucker."}' http://127.0.0.1:5111/upload-json

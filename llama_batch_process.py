@@ -1,33 +1,104 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the terms described in the LICENSE file in
-# the root directory of this source tree.
-
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# This software may be used and distributed in accordance with the terms of the Llama 3 Community License Agreement.
-
+import os
+import json
 import asyncio
-
 import fire
-from llama_models.llama3_1.api.datatypes import Attachment, URL, UserMessage
+import shutil
+import requests
+import time
 
+from datetime import datetime
+from llama_models.llama3_1.api.datatypes import Attachment, URL, UserMessage
 from multi_turn import prompt_to_message, run_main
 
+# Configurable paths
+config_folder = "./DATA/JSON_TO_PROCESS"
+processed_folder = "./DATA/PROCESSED"
 
-def main(host: str, port: int, disable_safety: bool = False):
+# Ensure processed folder exists
+if not os.path.exists(processed_folder):
+    os.makedirs(processed_folder)
+
+
+def get_oldest_file(folder):
+    """Get the oldest file in the folder."""
+    files = [
+        os.path.join(folder, f) for f in os.listdir(folder)
+        if f.endswith(".json")
+    ]
+    if not files:
+        return None
+    oldest_file = min(files, key=os.path.getctime)
+    return oldest_file
+
+
+def update_file_timestamp(filepath):
+    """Touch the file to update its timestamp, making it the 'youngest'."""
+    os.utime(filepath, None)
+
+
+def callback_url(url, data):
+    """Send a callback to the URL with the processed data."""
+    try:
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        print(f"Callback to {url} successful: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to callback {url}: {e}")
+
+
+def main(host: str, port: int):
+    # Loop through the folder and process the oldest JSON file
+        # Get the oldest JSON file
+
+    json_file = get_oldest_file(config_folder)
+    if not json_file:
+        print("No JSON files to process.")
+        return
+
+    # Load the JSON data
+    try:
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON format in file: {json_file}. Error: {e}")
+        os.remove(json_file)  # Delete the file if it's invalid
+        print(f"Deleted invalid file: {json_file}")
+        return
+
+    # Check the expected format
+    if "id" not in data or "message" not in data or "callback_url" not in data:
+        print(f"Invalid format in file: {json_file}")
+        os.remove(json_file)
+        return
+
+    message = data["message"]
+
+    # Process the message using the run_main function
     result = asyncio.run(
         run_main(
             [
-                prompt_to_message("Summarize this text to be displayed in a website, format it nicely adding carriage returns and bullet points: International Business Machines Corporation, together with its subsidiaries, provides integrated solutions and services worldwide. The company operates through Software, Consulting, Infrastructure, and Financing segments. The Software segment offers a hybrid cloud and AI platforms that allows clients to realize their digital and AI transformations across the applications, data, and environments in which they operate. The Consulting segment focuses on skills integration for strategy, experience, technology, and operations by domain and industry. The Infrastructure segment provides on-premises and cloud based server, and storage solutions, as well as life-cycle services for hybrid cloud infrastructure deployment. The Financing segment offers client and commercial financing, facilitates IBM clients' acquisition of hardware, software, and services. The company has a strategic partnership to various companies including hyperscalers, service providers, global system integrators, and software and hardware vendors that includes Adobe, Amazon Web services, Microsoft, Oracle, Salesforce, Samsung Electronics and SAP, and others. The company was formerly known as Computing-Tabulating-Recording Co. International Business Machines Corporation was incorporated in 1911 and is headquartered in Armonk, New York."),
+                prompt_to_message(message),
             ],
             host=host,
             port=port,
-            disable_safety=disable_safety,
-        )
-    )
+            disable_safety=True,
+        ))
 
-    print(str(result))
+    # Add the result to the JSON data
+    data["result"] = str(result)
+
+    # Callback with the updated data
+    callback_url(data["callback_url"], data)
+
+    # Move the processed file or update its timestamp
+    try:
+        shutil.move(
+            json_file,
+            os.path.join(processed_folder, os.path.basename(json_file)))
+        print(f"Processed and moved file: {json_file}")
+    except Exception as e:
+        print(f"Failed to move file {json_file}: {e}")
+        update_file_timestamp(json_file)
 
 if __name__ == "__main__":
     fire.Fire(main)
