@@ -61,5 +61,10 @@ async def run_main(
                 log.print()
                 ret += str(log)
 
-    return ret
+    # Skip first line that has the prompt
+    lines = ret.split('\n')
+    lines_without_first = lines[1:]
+
+    # Join the lines back into a single string
+    return "\n".join(lines_without_first)
 
