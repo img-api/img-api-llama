@@ -95,18 +95,15 @@ def kill_llama():
     import psutil
     import signal
 
-    # Iterate over all running processes
-    for process in psutil.process_iter(['pid', 'name']):
-        try:
-            # Check if the process name contains 'llama'
-            if 'llama' in process.info['name'].lower():
-                print(f"Found llama process: PID = {process.info['pid']}")
-
-                os.kill(process.info['pid'], signal.SIGTERM)
-                time.sleep(60)
-
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
+    cmdline_pattern = ['/home/jupyter/LLAMA/venv/bin/python3', '/home/jupyter/LLAMA/venv/bin/llama', 'inference', 'start']
+    for process in psutil.process_iter(['pid', 'cmdline']):
+        cmdline = process.info['cmdline']
+        if cmdline == cmdline_pattern:
+            print(f"Found llama process: PID = {process.info['pid']}, Command Line: {' '.join(cmdline)}")
+            os.kill(process.info['pid'], signal.SIGKILL)
+            #process.terminate()  # Gracefully terminate
+            #process.wait()       # Wait for process to be terminated
+            time.sleep(100)
 
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
@@ -140,6 +137,7 @@ def main(host: str, port: int):
 
     message = "Ignore any text about cookies or website errors " + data["message"]
 
+    result = None
     try:
         # Process the message using the run_main function
         result = asyncio.run(
@@ -156,7 +154,9 @@ def main(host: str, port: int):
         shutil.move(
             json_file, os.path.join(ai_crashed, os.path.basename(json_file))
         )
+
         print(f"Failed to contact inference {json_file}: {e}")
+        kill_llama()
 
     if not result:
         return
