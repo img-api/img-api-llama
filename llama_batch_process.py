@@ -14,6 +14,7 @@ from multi_turn import prompt_to_message, run_main
 # Configurable paths
 source_folder = "./DATA/JSON_TO_PROCESS"
 processed_folder = "./DATA/PROCESSED"
+ai_crashed = "./DATA/AI_FAILED"
 failed_folder = "./DATA/FAILED"
 
 # Ensure processed folder exists
@@ -26,13 +27,21 @@ if not os.path.exists(processed_folder):
 if not os.path.exists(failed_folder):
     os.makedirs(failed_folder)
 
+if not os.path.exists(ai_crashed):
+    os.makedirs(ai_crashed)
+
+def get_youngest_file(folder):
+    """Get the oldest file in the folder."""
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".json")]
+    if not files:
+        return None
+    youngest_file = max(files, key=os.path.getctime)
+    return youngest_file
+
 
 def get_oldest_file(folder):
     """Get the oldest file in the folder."""
-    files = [
-        os.path.join(folder, f) for f in os.listdir(folder)
-        if f.endswith(".json")
-    ]
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".json")]
     if not files:
         return None
     oldest_file = min(files, key=os.path.getctime)
@@ -57,19 +66,65 @@ def callback_url(url, data):
 
     return False
 
+def upload_file(json_file):
+    try:
+        with open(json_file, "r") as f:
+            data = json.load(f)
+
+            result_ok = callback_url(data["callback_url"], data)
+            if result_ok:
+                shutil.move(
+                    json_file, os.path.join(processed_folder, os.path.basename(json_file))
+                )
+            else:
+                shutil.move(
+                    json_file, os.path.join(failed_folder, os.path.basename(json_file))
+                )
+
+        print(f"Result saved to file: {json_file}")
+
+    except Exception as e:
+
+        print(f"Failed to save result to file {json_file}: {e}")
+
+        os.remove(json_file)  # Delete the file if it can't be saved
+        print(f"Deleted file due to save error: {json_file}")
+
+def kill_llama():
+    import time
+    import psutil
+    import signal
+
+    # Iterate over all running processes
+    for process in psutil.process_iter(['pid', 'name']):
+        try:
+            # Check if the process name contains 'llama'
+            if 'llama' in process.info['name'].lower():
+                print(f"Found llama process: PID = {process.info['pid']}")
+
+                os.kill(process.info['pid'], signal.SIGTERM)
+                time.sleep(60)
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
 
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
     # Get the oldest JSON file
 
-    json_file = get_oldest_file(source_folder)
+    json_file = get_oldest_file(failed_folder)
+    if json_file:
+        upload_file(json_file)
+
+
+    json_file = get_youngest_file(source_folder)
     if not json_file:
         print("No JSON files to process.")
         return
 
     # Load the JSON data
     try:
-        with open(json_file, 'r') as f:
+        with open(json_file, "r") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         print(f"Invalid JSON format in file: {json_file}. Error: {e}")
@@ -83,45 +138,41 @@ def main(host: str, port: int):
         os.remove(json_file)
         return
 
-    message = data["message"]
+    message = "Ignore any text about cookies or website errors " + data["message"]
 
-    # Process the message using the run_main function
-    result = asyncio.run(
-        run_main(
-            [
-                prompt_to_message(message),
-            ],
-            host=host,
-            port=port,
-            disable_safety=True,
-        ))
+    try:
+        # Process the message using the run_main function
+        result = asyncio.run(
+            run_main(
+                [
+                    prompt_to_message(message),
+                ],
+                host=host,
+                port=port,
+                disable_safety=True,
+            )
+        )
+    except Exception as e:
+        shutil.move(
+            json_file, os.path.join(ai_crashed, os.path.basename(json_file))
+        )
+        print(f"Failed to contact inference {json_file}: {e}")
+
+    if not result:
+        return
 
     # Add the result to the JSON data
     data["result"] = str(result).replace("StepType.inference> ", "")
 
     # Callback with the updated data
-    result_ok = callback_url(data["callback_url"], data)
-
-    # Save the updated JSON data back to the same file
     try:
-        with open(json_file, 'w') as f:
+        with open(json_file, "w") as f:
             json.dump(data, f, indent=4)
 
-        if result_ok:
-            shutil.move(
-                json_file,
-                os.path.join(processed_folder, os.path.basename(json_file)))
-        else:
-            shutil.move(
-                json_file,
-                os.path.join(failed_folder, os.path.basename(json_file)))
+        upload_file(json_file)
 
-        print(f"Result saved to file: {json_file}")
     except Exception as e:
         print(f"Failed to save result to file {json_file}: {e}")
-        os.remove(json_file)  # Delete the file if it can't be saved
-        print(f"Deleted file due to save error: {json_file}")
-
 
 if __name__ == "__main__":
     fire.Fire(main)
