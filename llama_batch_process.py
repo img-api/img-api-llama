@@ -56,7 +56,7 @@ def update_file_timestamp(filepath):
 def callback_url(url, data):
     """Send a callback to the URL with the processed data."""
     try:
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, verify=False)
         response.raise_for_status()
         print(f"Callback to {url} successful: {response.status_code}")
 
@@ -135,6 +135,8 @@ def main(host: str, port: int):
         os.remove(json_file)
         return
 
+    print(f" FILE TO PROCESS {json_file}")
+
     message = "Ignore any text about cookies or website errors " + data["message"]
 
     result = None
@@ -159,6 +161,10 @@ def main(host: str, port: int):
         kill_llama()
 
     if not result:
+        print(f"NO RESULT {json_file}")
+        shutil.move(
+            json_file, os.path.join(ai_crashed, os.path.basename(json_file))
+        )
         return
 
     # Add the result to the JSON data

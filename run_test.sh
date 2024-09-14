@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "${BASH_SOURCE%/*}"
+
 source .venv/bin/activate
 
 #export PYTHONPATH=$PYTHONPATH:/home/amcell/LLAMA/llama-agentic-system
