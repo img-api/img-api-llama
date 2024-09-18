@@ -1,0 +1,14 @@
+[
+    {
+        "function": {
+            "name": "set_article_information",
+            "arguments": {
+                "paragraph": "Intel Corp.\u2019s (INTC) shares jumped 6.4% following report that the company qualified for $3.5 billion in federal grants to make semiconductors for the U.S. Department of Defense. Shares of The Boeing Co. (BA) fell 0.8% after the company announced plans freezing hiring and weighing temporary furloughs in the coming weeks. Shares of Nuvalent Inc.\u2019s (NUVL) soared 28.3% after the company released positive data on two experimental cancer treatments over the weekend. Alcoa Corporation (AA) shares climbed 6.1% after the company agreed to sell its full 25.1% ownership in the Ma\u2019aden joint venture for about $1.1 billion.",
+                "sentiment": "positive",
+                "sentiment_score": "9",
+                "summary": "Intel Corp\u2019s shares jumped 6.4%, The Boeing Co fell 0.8%, Nuvalent Inc soared 28.3% and Alcoa Corporation climbed 6.1%.",
+                "title": "Stocks: Intel Corp., The Boeing Co., Nuvalent Inc., Alcoa Corporation"
+            }
+        }
+    }
+]

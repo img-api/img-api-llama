@@ -1,4 +1,3 @@
-import re
 import os
 import json
 import asyncio
@@ -9,9 +8,8 @@ import requests
 import time
 
 from datetime import datetime
-
-
-import ollama
+from llama_models.llama3_1.api.datatypes import Attachment, URL, UserMessage
+from multi_turn import prompt_to_message, run_main
 
 # Configurable paths
 source_folder = "./DATA/JSON_TO_PROCESS"
@@ -31,7 +29,6 @@ if not os.path.exists(failed_folder):
 
 if not os.path.exists(ai_crashed):
     os.makedirs(ai_crashed)
-
 
 def get_youngest_file(folder):
     """Get the oldest file in the folder."""
@@ -69,7 +66,6 @@ def callback_url(url, data):
 
     return False
 
-
 def upload_file(json_file):
     try:
         with open(json_file, "r") as f:
@@ -78,8 +74,7 @@ def upload_file(json_file):
             result_ok = callback_url(data["callback_url"], data)
             if result_ok:
                 shutil.move(
-                    json_file,
-                    os.path.join(processed_folder, os.path.basename(json_file)),
+                    json_file, os.path.join(processed_folder, os.path.basename(json_file))
                 )
             else:
                 shutil.move(
@@ -95,34 +90,25 @@ def upload_file(json_file):
         os.remove(json_file)  # Delete the file if it can't be saved
         print(f"Deleted file due to save error: {json_file}")
 
-
 def kill_llama():
     import time
     import psutil
     import signal
 
-    cmdline_pattern = [
-        "/home/jupyter/LLAMA/venv/bin/python3",
-        "/home/jupyter/LLAMA/venv/bin/llama",
-        "inference",
-        "start",
-    ]
-    for process in psutil.process_iter(["pid", "cmdline"]):
-        cmdline = process.info["cmdline"]
+    cmdline_pattern = ['/home/jupyter/LLAMA/venv/bin/python3', '/home/jupyter/LLAMA/venv/bin/llama', 'inference', 'start']
+    for process in psutil.process_iter(['pid', 'cmdline']):
+        cmdline = process.info['cmdline']
         if cmdline == cmdline_pattern:
-            print(
-                f"Found llama process: PID = {process.info['pid']}, Command Line: {' '.join(cmdline)}"
-            )
-            os.kill(process.info["pid"], signal.SIGKILL)
-            # process.terminate()  # Gracefully terminate
-            # process.wait()       # Wait for process to be terminated
+            print(f"Found llama process: PID = {process.info['pid']}, Command Line: {' '.join(cmdline)}")
+            os.kill(process.info['pid'], signal.SIGKILL)
+            #process.terminate()  # Gracefully terminate
+            #process.wait()       # Wait for process to be terminated
 
     count = 5
     while count > 0:
         print("..WAIT.. " + str(count))
         count -= 1
         time.sleep(10)
-
 
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
@@ -131,6 +117,7 @@ def main(host: str, port: int):
     json_file = get_oldest_file(failed_folder)
     if json_file:
         upload_file(json_file)
+
 
     json_file = get_youngest_file(source_folder)
     if not json_file:
@@ -159,32 +146,30 @@ def main(host: str, port: int):
 
     result = None
     try:
-
-        response = ollama.chat(
-            model="llama3.1",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message,
-                },
-            ],
-        )
         # Process the message using the run_main function
-
-        result = response["message"]["content"]
-        result = re.sub(r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result)
-
-        print(f" *** {result}")
-
+        result = asyncio.run(
+            run_main(
+                [
+                    prompt_to_message(message),
+                ],
+                host=host,
+                port=port,
+                disable_safety=True,
+            )
+        )
     except Exception as e:
-        shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
+        shutil.move(
+            json_file, os.path.join(ai_crashed, os.path.basename(json_file))
+        )
 
         print(f"Failed to contact inference {json_file}: {e}")
-        # kill_llama()
+        kill_llama()
 
     if not result:
         print(f"NO RESULT {json_file}")
-        shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
+        shutil.move(
+            json_file, os.path.join(ai_crashed, os.path.basename(json_file))
+        )
         return
 
     # Add the result to the JSON data
@@ -199,7 +184,6 @@ def main(host: str, port: int):
 
     except Exception as e:
         print(f"Failed to save result to file {json_file}: {e}")
-
 
 if __name__ == "__main__":
     fire.Fire(main)
