@@ -178,7 +178,7 @@ def run_prompt(article):
                         "required": [
                             "paragraph",
                             "sentiment",
-                            "tile",
+                            "title",
                             "summary",
                             "no_bullshit",
                             "gif_keywords",
