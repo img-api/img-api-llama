@@ -95,33 +95,80 @@ def upload_file(json_file):
         os.remove(json_file)  # Delete the file if it can't be saved
         print(f"Deleted file due to save error: {json_file}")
 
+def run_prompt(article) :
+    bullshit = "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
 
-def kill_llama():
-    import time
-    import psutil
-    import signal
+    gif_prompt = "add a funny list of keywords appropiate to the article to find an image and meme related"
 
-    cmdline_pattern = [
-        "/home/jupyter/LLAMA/venv/bin/python3",
-        "/home/jupyter/LLAMA/venv/bin/llama",
-        "inference",
-        "start",
-    ]
-    for process in psutil.process_iter(["pid", "cmdline"]):
-        cmdline = process.info["cmdline"]
-        if cmdline == cmdline_pattern:
-            print(
-                f"Found llama process: PID = {process.info['pid']}, Command Line: {' '.join(cmdline)}"
-            )
-            os.kill(process.info["pid"], signal.SIGKILL)
-            # process.terminate()  # Gracefully terminate
-            # process.wait()       # Wait for process to be terminated
+    prompt = f"from the following article, clean the article, {gif_prompt}, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nArticle: {article} "
 
-    count = 5
-    while count > 0:
-        print("..WAIT.. " + str(count))
-        count -= 1
-        time.sleep(10)
+    response = ollama.chat(
+        model="llama3.1",
+        messages=[{"role": "user", "content": prompt}],
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "set_article_information",
+                    "description": "Set all the information about the article provided",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "gif_keywords": {
+                                "type": "string",
+                                "description": "keywords to search on a gif website",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "a one line title describing the article",
+                            },
+                            "paragraph": {
+                                "type": "string",
+                                "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "a two to three paragraph summary",
+                            },
+                            "no_bullshit": {
+                                "type": "string",
+                                "description": bullshit,
+                            },
+                            "sentiment": {
+                                "type": "string",
+                                "enum": [ "positive", "negative", "neutral" ],
+                                "description": "The sentiment positive, negative, neutral",
+                            },
+                            "sentiment_score": {
+                                "type": "integer",
+                                "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
+                            },
+                        },
+                        "required": ["paragraph", "sentiment", "tile", "summary", "no_bullshit", "gif_keywords"],
+                    },
+                },
+            }
+        ],
+    )
+
+    if "tool_calls" not in response["message"]:
+        print("Failed loading json")
+        return None
+
+    try:
+        result = response["message"]["tool_calls"]
+
+        #with open("test_return.json", "w") as f:
+        #   json.dump(result, f, indent=4)
+
+        dmp = json.dumps(result, indent=4)
+        print(dmp)
+
+        return result
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON format Error: {e}")
+
+    return None
 
 
 def main(host: str, port: int):
@@ -161,7 +208,7 @@ def main(host: str, port: int):
     try:
 
         response = ollama.chat(
-            model="llama3.1",
+            model="llama3.2",
             messages=[
                 {
                     "role": "user",
@@ -176,6 +223,11 @@ def main(host: str, port: int):
 
         print(f" *** {result}")
 
+        res = run_prompt(message)
+        if not res:
+            print(" RETRY, MAYBE OUR LLAMA WAS LAZY ")
+            res = run_prompt(message)
+
     except Exception as e:
         shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
 
@@ -188,7 +240,11 @@ def main(host: str, port: int):
         return
 
     # Add the result to the JSON data
-    data["result"] = str(result).replace("StepType.inference> ", "")
+
+    if res:
+        data["ai_summary"] = str(result).replace("StepType.inference> ", "")
+        data["dict"] = res
+        data["type"] = "dict"
 
     # Callback with the updated data
     try:

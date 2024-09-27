@@ -124,6 +124,92 @@ def kill_llama():
         time.sleep(10)
 
 
+def run_prompt(article):
+    bullshit = (
+        "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
+    )
+
+    gif_prompt = "add a funny list of keywords appropiate to the article to find an image and meme related"
+
+    prompt = f"from the following article, clean the article, {gif_prompt}, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nArticle: {article} "
+
+    response = ollama.chat(
+        model="llama3.1",
+        messages=[{"role": "user", "content": prompt}],
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "set_article_information",
+                    "description": "Set all the information about the article provided",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "gif_keywords": {
+                                "type": "string",
+                                "description": "keywords to search on a gif website",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "a one line title describing the article",
+                            },
+                            "paragraph": {
+                                "type": "string",
+                                "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "a two to three paragraph summary",
+                            },
+                            "no_bullshit": {
+                                "type": "string",
+                                "description": bullshit,
+                            },
+                            "sentiment": {
+                                "type": "string",
+                                "enum": ["positive", "negative", "neutral"],
+                                "description": "The sentiment positive, negative, neutral",
+                            },
+                            "sentiment_score": {
+                                "type": "integer",
+                                "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
+                            },
+                        },
+                        "required": [
+                            "paragraph",
+                            "sentiment",
+                            "tile",
+                            "summary",
+                            "no_bullshit",
+                            "gif_keywords",
+                        ],
+                    },
+                },
+            }
+        ],
+    )
+
+    if "tool_calls" not in response["message"]:
+        print("Failed loading json")
+        return None
+
+    try:
+        result = response["message"]["tool_calls"]
+
+        # with open("test_return.json", "w") as f:
+        #   json.dump(result, f, indent=4)
+
+        dmp = json.dumps(result, indent=4)
+        print(dmp)
+
+        d = json.loads(dmp)
+        return d
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON format Error: {e}")
+
+    return None
+
+
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
     # Get the oldest JSON file
@@ -158,10 +244,12 @@ def main(host: str, port: int):
     message = "Ignore any text about cookies or website errors " + data["message"]
 
     result = None
+    res_json = None
+
     try:
 
         response = ollama.chat(
-            model="llama3.1",
+            model="llama3.2",
             messages=[
                 {
                     "role": "user",
@@ -172,9 +260,16 @@ def main(host: str, port: int):
         # Process the message using the run_main function
 
         result = response["message"]["content"]
-        result = re.sub(r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result)
+        result = re.sub(
+            r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result
+        )
 
         print(f" *** {result}")
+
+        res_json = run_prompt(message)
+        if not res_json:
+            print(" RETRY, MAYBE OUR LLAMA WAS LAZY ")
+            res_json = run_prompt(message)
 
     except Exception as e:
         shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
@@ -188,7 +283,13 @@ def main(host: str, port: int):
         return
 
     # Add the result to the JSON data
-    data["result"] = str(result).replace("StepType.inference> ", "")
+
+    if res_json != None:
+        data["ai_summary"] = str(result).replace("StepType.inference> ", "")
+        data["dict"] = res_json
+        data["type"] = "dict"
+    else:
+        data["result"] = str(result).replace("StepType.inference> ", "")
 
     # Callback with the updated data
     try:
