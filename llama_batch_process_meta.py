@@ -142,7 +142,7 @@ def main(host: str, port: int):
 
     print(f" FILE TO PROCESS {json_file}")
 
-    message = "Ignore any text about cookies or website errors " + data["message"]
+    message = "Ignore any text about cookies or website errors and don't mention about it. " + data["message"]
 
     result = None
     try:

@@ -125,11 +125,13 @@ def kill_llama():
 
 
 def run_prompt(article):
+    start_time = time.time()  # Start time measurement
+
     bullshit = (
         "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
     )
 
-    gif_prompt = "add a funny list of keywords appropiate to the article to find an image and meme related"
+    gif_prompt = ". No markdown on gif_keywords, find a funny list of keywords appropiate to the article to find an image that represents the article, and meme related, "
 
     prompt = f"from the following article, clean the article, {gif_prompt}, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nArticle: {article} "
 
@@ -147,7 +149,7 @@ def run_prompt(article):
                         "properties": {
                             "gif_keywords": {
                                 "type": "string",
-                                "description": "keywords to search on a gif website",
+                                "description": "use the sentiment to create a list of human emotions, no markdown, only comma separated list",
                             },
                             "title": {
                                 "type": "string",
@@ -203,6 +205,10 @@ def run_prompt(article):
         print(dmp)
 
         d = json.loads(dmp)
+
+        end_time = time.time()  # End time measurement
+        print(f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds")  # Print elapsed time
+
         return d
     except json.JSONDecodeError as e:
         print(f"Invalid JSON format Error: {e}")
@@ -241,7 +247,13 @@ def main(host: str, port: int):
 
     print(f" FILE TO PROCESS {json_file}")
 
-    message = "Ignore any text about cookies or website errors " + data["message"]
+    if 'article' in data and 'prompt' in data:
+        message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
+        message += data["prompt"] + " [END PROMPT], "
+        message += "MESSAGE TO PROCESS BEGIN [ " + data["message"] + "], "
+        message += "[EXTRA INFORMATION] Ignore any text about cookies or website errors and don't mention it "
+    else:
+        message = data["message"] + ", [ignore any text about cookies or website errors and don't mention it] "
 
     result = None
     res_json = None
