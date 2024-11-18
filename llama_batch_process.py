@@ -247,7 +247,13 @@ def main(host: str, port: int):
 
     print(f" FILE TO PROCESS {json_file}")
 
-    if 'article' in data and 'prompt' in data:
+    if 'type' in data and data['type'] == "user_prompt":
+        message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
+        message += data["prompt"] + " [END PROMPT], "
+        message += "MESSAGE TO PROCESS [" + data["message"] + "] "
+        print(" FOUND USER MESSAGE ")
+
+    elif 'article' in data and 'prompt' in data:
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
         message += data["prompt"] + " [END PROMPT], "
         message += "MESSAGE TO PROCESS BEGIN [ " + data["message"] + "], "
