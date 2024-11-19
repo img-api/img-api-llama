@@ -13,6 +13,7 @@ PRIORITY_FOLDER = "./DATA/JSON_TO_PROCESS_PRIORITY"
 if not os.path.exists(PRIORITY_FOLDER):
     os.makedirs(PRIORITY_FOLDER)
 
+
 def get_files_and_dates_sorted(folder_path):
     files_info = []
     for dirpath, dirnames, filenames in os.walk(folder_path):
@@ -44,7 +45,16 @@ def count_files_in_folder(folder_path):
 
 @app.route("/")
 def hello():
-    return "Hello, World!"
+    return (
+        jsonify(
+            {
+                "process": get_files_and_dates_sorted(SAVE_FOLDER),
+                "priority": get_files_and_dates_sorted(PRIORITY_FOLDER),
+                "message": "JSON file saved successfully",
+            }
+        ),
+        200,
+    )
 
 
 # Route to handle file upload
