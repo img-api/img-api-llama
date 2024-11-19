@@ -44,6 +44,7 @@ def count_files_in_folder(folder_path):
 
 
 @app.route("/")
+@app.route("/api_v1/")
 def hello():
     return (
         jsonify(
@@ -59,6 +60,7 @@ def hello():
 
 # Route to handle file upload
 @app.route("/upload-json", methods=["POST"])
+@app.route("/api_v1/upload-json", methods=["POST"])
 def upload_json():
     # Check if the request has JSON data
     if request.is_json:
