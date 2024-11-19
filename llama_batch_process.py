@@ -240,7 +240,7 @@ def main(host: str, port: int):
         return
 
     # Check the expected format
-    if "id" not in data or "message" not in data or "callback_url" not in data:
+    if "id" not in data or "callback_url" not in data:
         print(f"Invalid format in file: {json_file}")
         os.remove(json_file)
         return
@@ -248,10 +248,13 @@ def main(host: str, port: int):
     print(f" FILE TO PROCESS {json_file}")
 
     if 'type' in data and data['type'] == "user_prompt":
+        print("--------------------------------------------------------------------")
+        print(" FOUND USER MESSAGE ")
+        print("--------------------------------------------------------------------")
+
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
         message += data["prompt"] + " [END PROMPT], "
-        message += "MESSAGE TO PROCESS [" + data["message"] + "] "
-        print(" FOUND USER MESSAGE ")
+        message += "MESSAGE TO PROCESS [" + data["article"] + "] "
 
     elif 'article' in data and 'prompt' in data:
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
