@@ -15,11 +15,16 @@ import ollama
 
 # Configurable paths
 source_folder = "./DATA/JSON_TO_PROCESS"
+priority_folder = "./DATA/JSON_TO_PROCESS_PRIORITY"
+
 processed_folder = "./DATA/PROCESSED"
 ai_crashed = "./DATA/AI_FAILED"
 failed_folder = "./DATA/FAILED"
 
 # Ensure processed folder exists
+if not os.path.exists(priority_folder):
+    os.makedirs(priority_folder)
+
 if not os.path.exists(source_folder):
     os.makedirs(source_folder)
 
@@ -224,7 +229,12 @@ def main(host: str, port: int):
     if json_file:
         upload_file(json_file)
 
-    json_file = get_youngest_file(source_folder)
+    # We process first priority orders
+    json_file = get_oldest_file(priority_folder)
+    if not json_file:
+        json_file = get_youngest_file(source_folder)
+
+    # Process our queue being the first ones more important
     if not json_file:
         print("No JSON files to process.")
         return
