@@ -3,6 +3,22 @@ import json
 from flask import Flask, request, jsonify
 from datetime import datetime
 
+
+def clean_path(input_path, base_folder):
+    # Remove invalid characters
+    safe_path = os.path.normpath(input_path)  # Normalize the path
+    safe_path = os.path.basename(safe_path)  # Strip to the file name
+
+    # Join with base folder and ensure it stays within it
+    absolute_base = os.path.abspath(base_folder)
+    cleaned_path = os.path.abspath(os.path.join(absolute_base, safe_path))
+
+    if not cleaned_path.startswith(absolute_base):
+        raise ValueError("Invalid path: Attempt to escape base folder")
+
+    return cleaned_path
+
+
 app = Flask(__name__)
 
 SAVE_FOLDER = "./DATA/JSON_TO_PROCESS"
@@ -51,7 +67,7 @@ def hello():
             {
                 "process": get_files_and_dates_sorted(SAVE_FOLDER),
                 "priority": get_files_and_dates_sorted(PRIORITY_FOLDER),
-                "message": "JSON file saved successfully",
+                "status": "success",
             }
         ),
         200,
@@ -77,7 +93,14 @@ def upload_json():
                 folder = PRIORITY_FOLDER
 
             # Define the filename
-            filename = os.path.join(folder, data["id"] + "_data.json")
+
+            fn = data["id"] + "_data.json"
+
+            if "prefix" in data:
+                fn = data["prefix"] + "_" + fn
+
+            filename = clean_path(fn, folder)
+            print(" SAVING " + filename)
 
             # Save the JSON data to a file
             with open(filename, "w") as json_file:
@@ -90,7 +113,7 @@ def upload_json():
                     {
                         "queue_size": total_files,
                         "files_folder": files_folder,
-                        "message": "JSON file saved successfully",
+                        "status": "success",
                     }
                 ),
                 200,

@@ -181,6 +181,10 @@ def run_prompt(article):
                                 "type": "integer",
                                 "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
                             },
+                            "article_interest": {
+                                "type": "integer",
+                                "description": "How interesting is this article to read, score from 0 to 10.",
+                            },
                         },
                         "required": [
                             "paragraph",
@@ -189,6 +193,7 @@ def run_prompt(article):
                             "summary",
                             "no_bullshit",
                             "gif_keywords",
+                            "article_interest",
                         ],
                     },
                 },
@@ -212,7 +217,9 @@ def run_prompt(article):
         d = json.loads(dmp)
 
         end_time = time.time()  # End time measurement
-        print(f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds")  # Print elapsed time
+        print(
+            f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
+        )  # Print elapsed time
 
         return d
     except json.JSONDecodeError as e:
@@ -257,7 +264,13 @@ def main(host: str, port: int):
 
     print(f" FILE TO PROCESS {json_file}")
 
-    if 'type' in data and data['type'] == "user_prompt":
+    if "type" in data and data["type"] == "translation":
+        print("--------------------------------------------------------------------")
+        print(" FOUND TRANSLATION ")
+        print("--------------------------------------------------------------------")
+        message = data["prompt"] + " " + data["article"]
+
+    elif "type" in data and data["type"] == "user_prompt":
         print("--------------------------------------------------------------------")
         print(" FOUND USER MESSAGE ")
         print("--------------------------------------------------------------------")
@@ -266,13 +279,17 @@ def main(host: str, port: int):
         message += data["prompt"] + " [END PROMPT], "
         message += "MESSAGE TO PROCESS [" + data["article"] + "] "
 
-    elif 'article' in data and 'prompt' in data:
+    elif "article" in data and "prompt" in data:
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
         message += data["prompt"] + " [END PROMPT], "
-        message += "MESSAGE TO PROCESS BEGIN [ " + data["message"] + "], "
+        message += "MESSAGE TO PROCESS BEGIN [ " + data["article"] + "], "
         message += "[EXTRA INFORMATION] Ignore any text about cookies or website errors and don't mention it "
-    else:
-        message = data["message"] + ", [ignore any text about cookies or website errors and don't mention it] "
+
+    elif "message" in data:
+        message = (
+            data["message"]
+            + ", [ignore any text about cookies or website errors and don't mention it] "
+        )
 
     result = None
     res_json = None
