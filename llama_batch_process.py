@@ -356,7 +356,7 @@ def main(host: str, port: int):
         message += "\n<-CONTENT-> " + data["article"]
         message += "\n<-PROMPT-> " + data["prompt"]
 
-        call_tools = True
+        call_tools = False
 
     elif "article" in data and "prompt" in data:
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
