@@ -7,9 +7,15 @@ import fire
 import shutil
 import requests
 import time
+import signal
 
 from datetime import datetime
 
+def timeout_handler(signum, frame):
+    raise TimeoutError("Program took too long to execute!")
+
+signal.signal(signal.SIGALRM, timeout_handler)
+signal.alarm(50)  # Set the alarm for 50 seconds
 
 import ollama
 
@@ -19,11 +25,15 @@ priority_folder = "./DATA/JSON_TO_PROCESS_PRIORITY"
 
 processed_folder = "./DATA/PROCESSED"
 ai_crashed = "./DATA/AI_FAILED"
+ai_timeout = "./DATA/AI_TIMEOUT"
 failed_folder = "./DATA/FAILED"
 
 # Ensure processed folder exists
 if not os.path.exists(priority_folder):
     os.makedirs(priority_folder)
+
+if not os.path.exists(ai_timeout):
+    os.makedirs(ai_timeout)
 
 if not os.path.exists(source_folder):
     os.makedirs(source_folder)
@@ -104,7 +114,6 @@ def upload_file(json_file):
 def kill_llama():
     import time
     import psutil
-    import signal
 
     cmdline_pattern = [
         "/home/jupyter/LLAMA/venv/bin/python3",
@@ -129,6 +138,70 @@ def kill_llama():
         time.sleep(10)
 
 
+def run_translation(prompt):
+    start_time = time.time()  # Start time measurement
+    response = ollama.chat(
+        model="llama3.1",
+        messages=[{"role": "user", "content": prompt}],
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "set_translation",
+                    "description": "As an expert native and professional translator, transcribe the text adjusted to the locale required.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "translation": {
+                                "type": "string",
+                                "description": "result of the translation",
+                            },
+                            "editor_comments": {
+                                "type": "string",
+                                "description": "Any comments on the transcript",
+                            },
+                        },
+                        "required": [
+                            "translation",
+                            "editor_comments",
+                        ],
+                    },
+                },
+            }
+        ],
+    )
+
+    if "tool_calls" not in response["message"]:
+        print("Failed loading json")
+        return None
+
+    try:
+        result = response["message"]["tool_calls"]
+
+        # with open("test_return.json", "w") as f:
+        #   json.dump(result, f, indent=4)
+
+        dmp = json.dumps(result, indent=4)
+        print(dmp)
+
+        d = json.loads(dmp)
+
+        end_time = time.time()  # End time measurement
+        print(
+            f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
+        )  # Print elapsed time
+
+        return d[0]['function']['arguments']['translation']
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON format Error: {e}")
+
+    return None
+
+def lowercase_keys(d):
+    if isinstance(d, dict):
+        return {key.lower(): lowercase_keys(value) if isinstance(value, dict) else value for key, value in d.items()}
+    return d
+
 def run_prompt(article):
     start_time = time.time()  # Start time measurement
 
@@ -136,9 +209,9 @@ def run_prompt(article):
         "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
     )
 
-    gif_prompt = ". No markdown on gif_keywords, find a funny list of keywords appropiate to the article to find an image that represents the article, and meme related, "
+    gif_prompt = ". No markdown on gif_keywords, find a funny list of keywords appropiate to the text to find an image that represents the text, and meme related, "
 
-    prompt = f"from the following article, clean the article, {gif_prompt}, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nArticle: {article} "
+    prompt = f"from the following text, clean, {gif_prompt}, if there is a company, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nText: {article} "
 
     response = ollama.chat(
         model="llama3.1",
@@ -148,7 +221,7 @@ def run_prompt(article):
                 "type": "function",
                 "function": {
                     "name": "set_article_information",
-                    "description": "Set all the information about the article provided",
+                    "description": "Set all the information about the text provided",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -158,7 +231,7 @@ def run_prompt(article):
                             },
                             "title": {
                                 "type": "string",
-                                "description": "a one line title describing the article",
+                                "description": "a one line title describing the text",
                             },
                             "paragraph": {
                                 "type": "string",
@@ -181,9 +254,9 @@ def run_prompt(article):
                                 "type": "integer",
                                 "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
                             },
-                            "article_interest": {
+                            "interest_score": {
                                 "type": "integer",
-                                "description": "How interesting is this article to read, score from 0 to 10.",
+                                "description": "How interesting is this text to read, score from 0 to 10.",
                             },
                         },
                         "required": [
@@ -193,7 +266,7 @@ def run_prompt(article):
                             "summary",
                             "no_bullshit",
                             "gif_keywords",
-                            "article_interest",
+                            "interest_score",
                         ],
                     },
                 },
@@ -207,6 +280,7 @@ def run_prompt(article):
 
     try:
         result = response["message"]["tool_calls"]
+        result = lowercase_keys(result)
 
         # with open("test_return.json", "w") as f:
         #   json.dump(result, f, indent=4)
@@ -264,10 +338,13 @@ def main(host: str, port: int):
 
     print(f" FILE TO PROCESS {json_file}")
 
+    translation = False
+    call_tools = False
     if "type" in data and data["type"] == "translation":
         print("--------------------------------------------------------------------")
         print(" FOUND TRANSLATION ")
         print("--------------------------------------------------------------------")
+        translation = True
         message = data["prompt"] + " " + data["article"]
 
     elif "type" in data and data["type"] == "user_prompt":
@@ -275,15 +352,19 @@ def main(host: str, port: int):
         print(" FOUND USER MESSAGE ")
         print("--------------------------------------------------------------------")
 
-        message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
-        message += data["prompt"] + " [END PROMPT], "
-        message += "MESSAGE TO PROCESS [" + data["article"] + "] "
+        message = "Don't metion anything about the prompt on the message or function calls,  "
+        message += "\n<-CONTENT-> " + data["article"]
+        message += "\n<-PROMPT-> " + data["prompt"]
+
+        call_tools = True
 
     elif "article" in data and "prompt" in data:
         message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
         message += data["prompt"] + " [END PROMPT], "
         message += "MESSAGE TO PROCESS BEGIN [ " + data["article"] + "], "
         message += "[EXTRA INFORMATION] Ignore any text about cookies or website errors and don't mention it "
+
+        call_tools = True
 
     elif "message" in data:
         message = (
@@ -295,29 +376,37 @@ def main(host: str, port: int):
     res_json = None
 
     try:
+        if translation:
+            res_json = run_translation(message)
+        else:
+            response = ollama.chat(
+                model="llama3.1",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": message,
+                    },
+                ],
+            )
+            # Process the message using the run_main function
 
-        response = ollama.chat(
-            model="llama3.2",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message,
-                },
-            ],
-        )
-        # Process the message using the run_main function
+            result = response["message"]["content"]
+            result = re.sub(
+                r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result
+            )
 
-        result = response["message"]["content"]
-        result = re.sub(
-            r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result
-        )
+            print(f" *** {result}")
 
-        print(f" *** {result}")
-
-        res_json = run_prompt(message)
-        if not res_json:
-            print(" RETRY, MAYBE OUR LLAMA WAS LAZY ")
+        if call_tools:
             res_json = run_prompt(message)
+            if not res_json:
+                print(" RETRY, MAYBE OUR LLAMA WAS LAZY ")
+                res_json = run_prompt(message)
+
+    except TimeoutError as e:
+        print(e)
+        print("---------------- TIMEOUT DOING PROCESSING --------------")
+        shutil.move(json_file, os.path.join(ai_timeout, os.path.basename(json_file)))
 
     except Exception as e:
         shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
@@ -325,7 +414,7 @@ def main(host: str, port: int):
         print(f"Failed to contact inference {json_file}: {e}")
         # kill_llama()
 
-    if not result:
+    if not translation and not result:
         print(f"NO RESULT {json_file}")
         shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
         return
@@ -333,7 +422,9 @@ def main(host: str, port: int):
     # Add the result to the JSON data
 
     if res_json != None:
-        data["ai_summary"] = str(result).replace("StepType.inference> ", "")
+        if result:
+            data["ai_summary"] = str(result).replace("StepType.inference> ", "")
+
         data["dict"] = res_json
         data["type"] = "dict"
     else:
