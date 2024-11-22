@@ -202,7 +202,7 @@ def lowercase_keys(d):
         return {key.lower(): lowercase_keys(value) if isinstance(value, dict) else value for key, value in d.items()}
     return d
 
-def run_prompt(article):
+def run_prompt(system, assistant, message, model="llama3.1"):
     start_time = time.time()  # Start time measurement
 
     bullshit = (
@@ -211,11 +211,26 @@ def run_prompt(article):
 
     gif_prompt = ". No markdown on gif_keywords, find a funny list of keywords appropiate to the text to find an image that represents the text, and meme related, "
 
-    prompt = f"from the following text, clean, {gif_prompt}, if there is a company, evaluate the sentiment in the stock market for the company involved. Use markdown to highlight important parts on the texts. Write a bullshit to no bullshit field as descripted  \nText: {article} "
+    system += f"from the following text, clean, {gif_prompt}, if there is a company,"
+    system += "evaluate the sentiment in the stock market for the company involved."
+    system += "Write a bullshit to no bullshit field as descripted  \n"
 
     response = ollama.chat(
-        model="llama3.1",
-        messages=[{"role": "user", "content": prompt}],
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": system,
+            },
+            {
+                "role": "assistant",
+                "content": assistant,
+            },
+            {
+                "role": "user",
+                "content": message,
+            },
+        ],
         tools=[
             {
                 "type": "function",
@@ -340,40 +355,46 @@ def main(host: str, port: int):
 
     translation = False
     call_tools = False
+
+    if "article" in data:
+        assistant = data["article"]
+
+    if "prompt" in data:
+        message = data["prompt"]
+
     if "type" in data and data["type"] == "translation":
         print("--------------------------------------------------------------------")
         print(" FOUND TRANSLATION ")
         print("--------------------------------------------------------------------")
         translation = True
-        message = data["prompt"] + " " + data["article"]
 
     elif "type" in data and data["type"] == "user_prompt":
         print("--------------------------------------------------------------------")
         print(" FOUND USER MESSAGE ")
         print("--------------------------------------------------------------------")
-
-        message = "Don't metion anything about the prompt on the message or function calls,  "
-        message += "\n<-CONTENT-> " + data["article"]
-        message += "\n<-PROMPT-> " + data["prompt"]
-
         call_tools = False
 
     elif "article" in data and "prompt" in data:
-        message = "Don't metion anything about the prompt on the message or function calls, [BEGIN PROMPT]: "
-        message += data["prompt"] + " [END PROMPT], "
-        message += "MESSAGE TO PROCESS BEGIN [ " + data["article"] + "], "
-        message += "[EXTRA INFORMATION] Ignore any text about cookies or website errors and don't mention it "
-
+        print("--------------------------------------------------------------------")
+        print(" FOUND PROMPT AND ARTICLE ")
+        print("--------------------------------------------------------------------")
         call_tools = True
 
     elif "message" in data:
-        message = (
-            data["message"]
-            + ", [ignore any text about cookies or website errors and don't mention it] "
-        )
+        print("--------------------------------------------------------------------")
+        print(" COMPANY SIMPLE FORMAT ")
+        print("--------------------------------------------------------------------")
+        assistant = ""
+        message = data["message"]
 
     result = None
     res_json = None
+
+    system = "You are an expert stock analyst,"
+    system += "You write like Richard Dennis."
+    system += "Don't metion anything about the prompt on the message or function calls we might do,"
+    system += "ignore messages about cookies and don't mention them."
+    system += "Use markdown to highlight important parts on the texts."
 
     try:
         if translation:
@@ -382,6 +403,14 @@ def main(host: str, port: int):
             response = ollama.chat(
                 model="llama3.1",
                 messages=[
+                    {
+                        "role": "system",
+                        "content": system,
+                    },
+                    {
+                        "role": "assistant",
+                        "content": assistant,
+                    },
                     {
                         "role": "user",
                         "content": message,
@@ -398,10 +427,14 @@ def main(host: str, port: int):
             print(f" *** {result}")
 
         if call_tools:
-            res_json = run_prompt(message)
+            res_json = run_prompt(system, assistant, message, "llama3.1")
             if not res_json:
-                print(" RETRY, MAYBE OUR LLAMA WAS LAZY ")
-                res_json = run_prompt(message)
+                print(message)
+                print(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+                res_json = run_prompt(system, assistant, message, "llama3.2")
+
+            if not res_json:
+                print(" FAILED LLAMA3.2 TOO ")
 
     except TimeoutError as e:
         print(e)
