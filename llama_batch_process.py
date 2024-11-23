@@ -223,12 +223,8 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                 "content": system,
             },
             {
-                "role": "assistant",
-                "content": assistant,
-            },
-            {
                 "role": "user",
-                "content": message,
+                "content": assistant + " " + message,
             },
         ],
         tools=[
@@ -390,8 +386,11 @@ def main(host: str, port: int):
     result = None
     res_json = None
 
-    system = "You are an expert stock analyst,"
-    system += "You write like Richard Dennis."
+    system = ""
+    system += "You are an expert stock analyst ,"
+    #system += "An expert stock market analyst has not only a good education background, "
+    #system += "extensive experience, but also advanced analytical and technical skills. "
+    system += "can provide financial advise as far as you specify at the end that this is not financial advice."
     system += "Don't metion anything about the prompt on the message or function calls we might do,"
     system += "ignore messages about cookies and don't mention them."
     system += "Use markdown to highlight important parts on the texts."
@@ -408,12 +407,12 @@ def main(host: str, port: int):
                         "content": system,
                     },
                     {
-                        "role": "assistant",
+                        "role": "user",
                         "content": assistant,
                     },
                     {
                         "role": "user",
-                        "content": message,
+                        "content": assistant + message,
                     },
                 ],
             )
