@@ -25,7 +25,7 @@ init(autoreset=True)
 
 
 def print_b(text):
-    print(Fore.BLUE + text)
+    print(Fore.LIGHTBLUE_EX + text)
 
 
 def print_g(text):
@@ -129,6 +129,9 @@ def sort_files_by_ascii_and_date(folder):
 
     # Sort files using ASCII priority and creation time
     sorted_files = sorted(files, key=file_priority_and_date)
+
+    report = " TOTAL FILES " + str(len(sorted_files))
+    print_g(report.rjust(80))
     return sorted_files
 
 
@@ -255,7 +258,7 @@ def run_translation(prompt):
     )
 
     if "tool_calls" not in response["message"]:
-        print("Failed loading json")
+        print_e("Failed loading json")
         return None
 
     try:
@@ -265,12 +268,12 @@ def run_translation(prompt):
         #   json.dump(result, f, indent=4)
 
         dmp = json.dumps(result, indent=4)
-        print(dmp)
-
         d = json.loads(dmp)
 
+        print_json(result)
+
         end_time = time.time()  # End time measurement
-        print(
+        print_b(
             f"\n\nTime taken to process run_prompt: {end_time - start_time:.2f} seconds"
         )  # Print elapsed time
 
@@ -422,7 +425,7 @@ def main(host: str, port: int):
 
     # Process our queue being the first ones more important
     if not json_file:
-        print("No JSON files to process.")
+        print_e("No JSON files to process.")
         return
 
     # Load the JSON data
@@ -430,14 +433,14 @@ def main(host: str, port: int):
         with open(json_file, "r") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"Invalid JSON format in file: {json_file}. Error: {e}")
+        print_e(f"Invalid JSON format in file: {json_file}. Error: {e}")
         os.remove(json_file)  # Delete the file if it's invalid
-        print(f"Deleted invalid file: {json_file}")
+        print_r(f"Deleted invalid file: {json_file}")
         return
 
     # Check the expected format
     if "id" not in data or "callback_url" not in data:
-        print(f"Invalid format in file: {json_file}")
+        print_e(f"Invalid format in file: {json_file}")
         os.remove(json_file)
         return
 
@@ -510,13 +513,12 @@ def main(host: str, port: int):
             )
 
             console.print(Markdown(result))
-            #print(f" *** {result}")
 
         if call_tools:
             res_json = run_prompt(system, assistant, message, "llama3.1")
             if not res_json:
                 print(message)
-                print(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+                print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
                 res_json = run_prompt(system, assistant, message, "llama3.2")
 
             if not res_json:
@@ -557,7 +559,7 @@ def main(host: str, port: int):
         upload_file(json_file)
 
     except Exception as e:
-        print(f"Failed to save result to file {json_file}: {e}")
+        print_e(f"Failed to save result to file {json_file}: {e}")
 
 
 if __name__ == "__main__":
