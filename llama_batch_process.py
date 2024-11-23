@@ -301,7 +301,12 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 
         d = json.loads(dmp)
 
+        args = d[0]['function']['arguments']
         end_time = time.time()  # End time measurement
+
+        args['model'] = model
+        args['process_time'] = round(end_time - start_time, 2)
+
         print(
             f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
         )  # Print elapsed time
