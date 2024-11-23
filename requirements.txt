@@ -26,3 +26,5 @@ llama_models==0.0.2
 llama_toolchain==0.0.2
 llama_agentic_system==0.0.2
 flask
+colorama
+rich

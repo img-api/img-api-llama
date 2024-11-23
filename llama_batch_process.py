@@ -5,14 +5,69 @@ import asyncio
 
 import fire
 import shutil
+import urllib3
+import warnings
 import requests
 import time
 import signal
 
 from datetime import datetime
+from colorama import Fore, Back, Style, init
+
+from rich.console import Console
+from rich.markdown import Markdown
+
+console = Console()
+warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
+http = urllib3.PoolManager()
+
+init(autoreset=True)
+
+
+def print_b(text):
+    print(Fore.BLUE + text)
+
+
+def print_g(text):
+    print(Fore.GREEN + text)
+
+
+def print_r(text):
+    print(Fore.RED + text)
+
+
+line_80 = (
+    "--------------------------------------------------------------------------------"
+)
+
+
+def print_h(text):
+    print(Back.GREEN + Fore.BLUE + line_80)
+    print(Back.GREEN + Fore.BLUE + text.center(80))
+    print(Back.GREEN + Fore.BLUE + line_80)
+    print("\n")
+
+
+def print_e(text):
+    print(Back.RED + line_80)
+    print(Back.RED + text)
+    print(Back.RED + line_80)
+
+
+def print_json(json_in):
+    print_b(json.dumps(json_in, indent=4))
+
+
+def print_exception(err, text=""):
+    import traceback
+
+    print(Fore.RED + str(err))
+    traceback.print_tb(err.__traceback__)
+
 
 def timeout_handler(signum, frame):
     raise TimeoutError("Program took too long to execute!")
+
 
 signal.signal(signal.SIGALRM, timeout_handler)
 signal.alarm(50)  # Set the alarm for 50 seconds
@@ -57,6 +112,34 @@ def get_youngest_file(folder):
     return youngest_file
 
 
+def sort_files_by_ascii_and_date(folder):
+    """Sort files by the first character in ASCII order and creation date (oldest first)."""
+    # Fetch all .json files from the folder
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".json")]
+
+    if not files:
+        return None
+
+    # Helper function to get ASCII value of the first character and creation time
+    def file_priority_and_date(file):
+        first_char = os.path.basename(file)[0]
+        priority = ord(first_char)  # Get ASCII value of the first character
+        creation_time = os.path.getctime(file)  # Get creation time
+        return (priority, creation_time)
+
+    # Sort files using ASCII priority and creation time
+    sorted_files = sorted(files, key=file_priority_and_date)
+    return sorted_files
+
+
+def get_oldest_file_by_priority(folder):
+    arr = sort_files_by_ascii_and_date(folder)
+    if not arr:
+        return None
+
+    return arr[0]
+
+
 def get_oldest_file(folder):
     """Get the oldest file in the folder."""
     files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".json")]
@@ -76,11 +159,11 @@ def callback_url(url, data):
     try:
         response = requests.post(url, json=data, verify=False)
         response.raise_for_status()
-        print(f"Callback to {url} successful: {response.status_code}")
+        print_g(f"\nCallback to {url} successful: {response.status_code}\n")
 
         return True
     except requests.exceptions.RequestException as e:
-        print(f"Failed to callback {url}: {e}")
+        print_e(f"Failed to callback {url}: {e}")
 
     return False
 
@@ -188,19 +271,24 @@ def run_translation(prompt):
 
         end_time = time.time()  # End time measurement
         print(
-            f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
+            f"\n\nTime taken to process run_prompt: {end_time - start_time:.2f} seconds"
         )  # Print elapsed time
 
-        return d[0]['function']['arguments']['translation']
+        return d[0]["function"]["arguments"]["translation"]
     except json.JSONDecodeError as e:
         print(f"Invalid JSON format Error: {e}")
 
     return None
 
+
 def lowercase_keys(d):
     if isinstance(d, dict):
-        return {key.lower(): lowercase_keys(value) if isinstance(value, dict) else value for key, value in d.items()}
+        return {
+            key.lower(): lowercase_keys(value) if isinstance(value, dict) else value
+            for key, value in d.items()
+        }
     return d
+
 
 def run_prompt(system, assistant, message, model="llama3.1"):
     start_time = time.time()  # Start time measurement
@@ -301,11 +389,11 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 
         d = json.loads(dmp)
 
-        args = d[0]['function']['arguments']
+        args = d[0]["function"]["arguments"]
         end_time = time.time()  # End time measurement
 
-        args['model'] = model
-        args['process_time'] = round(end_time - start_time, 2)
+        args["model"] = model
+        args["process_time"] = round(end_time - start_time, 2)
 
         print(
             f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
@@ -321,6 +409,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
     # Get the oldest JSON file
+    print("\n\n")
 
     json_file = get_oldest_file(failed_folder)
     if json_file:
@@ -329,7 +418,7 @@ def main(host: str, port: int):
     # We process first priority orders
     json_file = get_oldest_file(priority_folder)
     if not json_file:
-        json_file = get_youngest_file(source_folder)
+        json_file = get_oldest_file_by_priority(source_folder)
 
     # Process our queue being the first ones more important
     if not json_file:
@@ -352,8 +441,6 @@ def main(host: str, port: int):
         os.remove(json_file)
         return
 
-    print(f" FILE TO PROCESS {json_file}")
-
     translation = False
     call_tools = False
 
@@ -364,37 +451,31 @@ def main(host: str, port: int):
         message = data["prompt"]
 
     if "type" in data and data["type"] == "translation":
-        print("--------------------------------------------------------------------")
-        print(" FOUND TRANSLATION ")
-        print("--------------------------------------------------------------------")
+        print_h(" FOUND TRANSLATION ")
         translation = True
 
     elif "type" in data and data["type"] == "user_prompt":
-        print("--------------------------------------------------------------------")
-        print(" FOUND USER MESSAGE ")
-        print("--------------------------------------------------------------------")
+        print_h(" FOUND USER MESSAGE ")
         call_tools = False
 
     elif "article" in data and "prompt" in data:
-        print("--------------------------------------------------------------------")
-        print(" FOUND PROMPT AND ARTICLE ")
-        print("--------------------------------------------------------------------")
+        print_h(" FOUND PROMPT AND ARTICLE ")
         call_tools = True
 
     elif "message" in data:
-        print("--------------------------------------------------------------------")
-        print(" COMPANY SIMPLE FORMAT ")
-        print("--------------------------------------------------------------------")
+        print_h(" COMPANY SIMPLE FORMAT ")
         assistant = ""
         message = data["message"]
+
+    print_g(f"FILE TO PROCESS {json_file}\n")
 
     result = None
     res_json = None
 
     system = ""
     system += "You are an expert stock analyst ,"
-    #system += "An expert stock market analyst has not only a good education background, "
-    #system += "extensive experience, but also advanced analytical and technical skills. "
+    # system += "An expert stock market analyst has not only a good education background, "
+    # system += "extensive experience, but also advanced analytical and technical skills. "
     system += "can provide financial advise as far as you specify at the end that this is not financial advice."
     system += "Don't metion anything about the prompt on the message or function calls we might do,"
     system += "ignore messages about cookies and don't mention them."
@@ -428,7 +509,8 @@ def main(host: str, port: int):
                 r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result
             )
 
-            print(f" *** {result}")
+            console.print(Markdown(result))
+            #print(f" *** {result}")
 
         if call_tools:
             res_json = run_prompt(system, assistant, message, "llama3.1")
