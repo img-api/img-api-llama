@@ -8,6 +8,5 @@ source .venv/bin/activate
 
 while true; do
     python3 llama_batch_process.py localhost 5000
-    sleep 1s
     done
 

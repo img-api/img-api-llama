@@ -13,6 +13,7 @@ import signal
 
 from datetime import datetime
 from colorama import Fore, Back, Style, init
+from collections import Counter
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -23,6 +24,12 @@ http = urllib3.PoolManager()
 
 init(autoreset=True)
 
+def word_count(text):
+    # Split the text into words and normalize to lowercase
+    words = text.lower().split()
+    # Count occurrences of each word
+    word_counts = Counter(words)
+    return word_counts
 
 def print_b(text):
     print(Fore.LIGHTBLUE_EX + text)
@@ -50,7 +57,7 @@ def print_h(text):
 
 def print_e(text):
     print(Back.RED + line_80)
-    print(Back.RED + text)
+    print(Back.RED + text.center(80))
     print(Back.RED + line_80)
 
 
@@ -310,12 +317,16 @@ def run_prompt(system, assistant, message, model="llama3.1"):
         model=model,
         messages=[
             {
+                "role": "user",
+                "content": assistant,
+            },
+            {
                 "role": "system",
                 "content": system,
             },
             {
                 "role": "user",
-                "content": assistant + " " + message,
+                "content": message,
             },
         ],
         tools=[
@@ -349,8 +360,52 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                             },
                             "sentiment": {
                                 "type": "string",
-                                "enum": ["positive", "negative", "neutral"],
-                                "description": "The sentiment positive, negative, neutral",
+                                "enum": [
+                                    "rocket",
+                                    "anchor",
+                                    "bat",
+                                    "wine-bottle",
+                                    "toilet-paper",
+                                    "sausage",
+                                    "chess-queen",
+                                    "chess-pawn",
+                                    "tired",
+                                    "surprise",
+                                    "smile-wink",
+                                    "smile-beam",
+                                    "sad-tear",
+                                    "sad-cry",
+                                    "meh-rolling-eyes",
+                                    "meh-blank",
+                                    "meh",
+                                    "laugh-wink",
+                                    "laugh-squint",
+                                    "laugh-beam",
+                                    "laugh-laugh",
+                                    "kiss-wink-heart",
+                                    "kiss-beam",
+                                    "kiss",
+                                    "grin-wink",
+                                    "grin-tongue-wink",
+                                    "grin-tongue-squint",
+                                    "grin-tongue",
+                                    "grin-tears",
+                                    "grin-stars",
+                                    "grin-squint-tears",
+                                    "grin-squint",
+                                    "grin-hearts",
+                                    "grin-beam-sweat",
+                                    "grin-beam",
+                                    "grin-alt",
+                                    "grin",
+                                    "grimace",
+                                    "frown-open",
+                                    "frown",
+                                    "flushed",
+                                    "dizzy",
+                                    "angry",
+                                ],
+                                "description": "The sentiment will be an icon from font-awesome. It is preferable to have a smiley from the supplied list.",
                             },
                             "sentiment_score": {
                                 "type": "integer",
@@ -358,7 +413,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                             },
                             "interest_score": {
                                 "type": "integer",
-                                "description": "How interesting is this text to read, score from 0 to 10.",
+                                "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
                             },
                         },
                         "required": [
@@ -446,6 +501,8 @@ def main(host: str, port: int):
 
     translation = False
     call_tools = False
+    assistant = ""
+    message = ""
 
     if "article" in data:
         assistant = data["article"]
@@ -475,14 +532,55 @@ def main(host: str, port: int):
     result = None
     res_json = None
 
-    system = ""
-    system += "You are an expert stock analyst ,"
-    # system += "An expert stock market analyst has not only a good education background, "
-    # system += "extensive experience, but also advanced analytical and technical skills. "
-    system += "can provide financial advise as far as you specify at the end that this is not financial advice."
-    system += "Don't metion anything about the prompt on the message or function calls we might do,"
-    system += "ignore messages about cookies and don't mention them."
-    system += "Use markdown to highlight important parts on the texts."
+    if "system" in data:
+        system = data["system"]
+    else:
+        system = ""
+        system += "Your name is TOTHEMOON, you are an expert stock analyst ,"
+        system += (
+            "An expert stock market analyst has not only a good education background, "
+        )
+        system += (
+            "extensive experience, but also advanced analytical and technical skills. "
+        )
+        system += "we are regulated and we can provide financial advise."
+        system += "Don't metion anything about the prompt on the message or function calls we might do,"
+        system += "You will get sometimes raw articles ignore messages about cookies and other irrelevant information."
+        system += "Use markdown to highlight important parts on the texts."
+
+    if "raw_ollama" in data:
+        arr_messages = data["raw_ollama"]
+    else:
+        arr_messages = []
+
+        if "assistant" in data:
+            arr_messages.append(
+                {
+                    "role": "assistant",
+                    "content": data["assistant"],
+                }
+            )
+
+            arr_messages.append(
+                {
+                    "role": "system",
+                    "content": system,
+                }
+            )
+
+            arr_messages.append(
+                {
+                    "role": "user",
+                    "content": message,
+                }
+            )
+        else:
+            arr_messages.append(
+                {
+                    "role": "user",
+                    "content": assistant + system + message,
+                }
+            )
 
     try:
         if translation:
@@ -490,20 +588,7 @@ def main(host: str, port: int):
         else:
             response = ollama.chat(
                 model="llama3.1",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system,
-                    },
-                    {
-                        "role": "user",
-                        "content": assistant,
-                    },
-                    {
-                        "role": "user",
-                        "content": assistant + message,
-                    },
-                ],
+                messages=arr_messages,
             )
             # Process the message using the run_main function
 
@@ -514,6 +599,11 @@ def main(host: str, port: int):
 
             console.print(Markdown(result))
 
+            for msg in arr_messages:
+                msg['word_count'] = len(word_count(msg['content']))
+
+            data["raw"] = arr_messages
+
         if call_tools:
             res_json = run_prompt(system, assistant, message, "llama3.1")
             if not res_json:
@@ -522,7 +612,7 @@ def main(host: str, port: int):
                 res_json = run_prompt(system, assistant, message, "llama3.2")
 
             if not res_json:
-                print(" FAILED LLAMA3.2 TOO ")
+                print_r(" FAILED LLAMA3.2 TOO ")
 
     except TimeoutError as e:
         print(e)
