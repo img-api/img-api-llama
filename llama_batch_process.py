@@ -24,6 +24,7 @@ http = urllib3.PoolManager()
 
 init(autoreset=True)
 
+
 def word_count(text):
     # Split the text into words and normalize to lowercase
     words = text.lower().split()
@@ -31,16 +32,17 @@ def word_count(text):
     word_counts = Counter(words)
     return word_counts
 
+
 def print_b(text):
     print(Fore.LIGHTBLUE_EX + text)
 
 
-def print_g(text):
-    print(Fore.GREEN + text)
+def print_g(text, in_place=False):
+    print(Fore.GREEN + text, end="\r" if in_place else "\n", flush=in_place)
 
 
-def print_r(text):
-    print(Fore.RED + text)
+def print_r(text, in_place=False):
+    print(Fore.RED + text, end="\r" if in_place else "\n", flush=in_place)
 
 
 line_80 = (
@@ -194,7 +196,7 @@ def upload_file(json_file):
                     json_file, os.path.join(failed_folder, os.path.basename(json_file))
                 )
 
-        print(f"Result saved to file: {json_file}")
+        print(f"Result saved to file: {json_file} \n")
 
     except Exception as e:
 
@@ -291,17 +293,101 @@ def run_translation(prompt):
     return None
 
 
-def lowercase_keys(d):
-    if isinstance(d, dict):
+def lowercase_keys(data):
+    if isinstance(data, dict):
         return {
-            key.lower(): lowercase_keys(value) if isinstance(value, dict) else value
-            for key, value in d.items()
+            key.lower(): lowercase_keys(value) if isinstance(value, (dict, list)) else value
+            for key, value in data.items()
         }
-    return d
+    elif isinstance(data, list):
+        return [lowercase_keys(item) for item in data]
+    return data
 
 
 def run_prompt(system, assistant, message, model="llama3.1"):
     start_time = time.time()  # Start time measurement
+
+    article_classification = [
+        "Individual Company News",
+        "Company PR",
+        "Company Results",
+        "Political Analysis",
+        "Lawsuit",
+        "Market News",
+        "Stock Analysis",
+        "Sector Analysis",
+        "Economic Report",
+        "Regulatory Update",
+        "Analyst Recommendation",
+        "Analyst Prediction",
+        "AI Generated Article",
+        "Opinion/Editorial",
+        "Rage Bait",
+        "Gossip",
+        "Advertisement",
+        "Technical Analysis",
+        "Insider Trading Report",
+        "Mergers and Acquisitions",
+        "IPO News",
+        "Dividend News",
+        "Earnings Preview",
+        "Earnings Call Summary",
+        "Macro Trend Analysis",
+        "International Markets",
+        "Central Bank Policy",
+        "Commodity News",
+        "Cryptocurrency News",
+        "ESG and Sustainability",
+        "Retail Investor Trends",
+        "Institutional Investor Trends",
+        "Other",
+    ]
+
+    sentiments_fontawesome = [
+        "rocket",
+        "anchor",
+        "bat",
+        "wine-bottle",
+        "toilet-paper",
+        "sausage",
+        "chess-queen",
+        "chess-pawn",
+        "tired",
+        "surprise",
+        "smile-wink",
+        "smile-beam",
+        "sad-tear",
+        "sad-cry",
+        "meh-rolling-eyes",
+        "meh-blank",
+        "meh",
+        "laugh-wink",
+        "laugh-squint",
+        "laugh-beam",
+        "laugh-laugh",
+        "kiss-wink-heart",
+        "kiss-beam",
+        "kiss",
+        "grin-wink",
+        "grin-tongue-wink",
+        "grin-tongue-squint",
+        "grin-tongue",
+        "grin-tears",
+        "grin-stars",
+        "grin-squint-tears",
+        "grin-squint",
+        "grin-hearts",
+        "grin-beam-sweat",
+        "grin-beam",
+        "grin-alt",
+        "grin",
+        "grimace",
+        "frown-open",
+        "frown",
+        "flushed",
+        "dizzy",
+        "angry",
+    ]
 
     bullshit = (
         "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
@@ -313,128 +399,147 @@ def run_prompt(system, assistant, message, model="llama3.1"):
     system += "evaluate the sentiment in the stock market for the company involved."
     system += "Write a bullshit to no bullshit field as descripted  \n"
 
-    response = ollama.chat(
-        model=model,
-        messages=[
-            {
-                "role": "user",
-                "content": assistant,
-            },
-            {
-                "role": "system",
-                "content": system,
-            },
-            {
-                "role": "user",
-                "content": message,
-            },
-        ],
-        tools=[
-            {
-                "type": "function",
-                "function": {
-                    "name": "set_article_information",
-                    "description": "Set all the information about the text provided",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "gif_keywords": {
-                                "type": "string",
-                                "description": "use the sentiment to create a list of human emotions, no markdown, only comma separated list",
-                            },
-                            "title": {
-                                "type": "string",
-                                "description": "a one line title describing the text",
-                            },
-                            "paragraph": {
-                                "type": "string",
-                                "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
-                            },
-                            "summary": {
-                                "type": "string",
-                                "description": "a two to three paragraph summary",
-                            },
-                            "no_bullshit": {
-                                "type": "string",
-                                "description": bullshit,
-                            },
-                            "sentiment": {
-                                "type": "string",
-                                "enum": [
-                                    "rocket",
-                                    "anchor",
-                                    "bat",
-                                    "wine-bottle",
-                                    "toilet-paper",
-                                    "sausage",
-                                    "chess-queen",
-                                    "chess-pawn",
-                                    "tired",
-                                    "surprise",
-                                    "smile-wink",
-                                    "smile-beam",
-                                    "sad-tear",
-                                    "sad-cry",
-                                    "meh-rolling-eyes",
-                                    "meh-blank",
-                                    "meh",
-                                    "laugh-wink",
-                                    "laugh-squint",
-                                    "laugh-beam",
-                                    "laugh-laugh",
-                                    "kiss-wink-heart",
-                                    "kiss-beam",
-                                    "kiss",
-                                    "grin-wink",
-                                    "grin-tongue-wink",
-                                    "grin-tongue-squint",
-                                    "grin-tongue",
-                                    "grin-tears",
-                                    "grin-stars",
-                                    "grin-squint-tears",
-                                    "grin-squint",
-                                    "grin-hearts",
-                                    "grin-beam-sweat",
-                                    "grin-beam",
-                                    "grin-alt",
-                                    "grin",
-                                    "grimace",
-                                    "frown-open",
-                                    "frown",
-                                    "flushed",
-                                    "dizzy",
-                                    "angry",
-                                ],
-                                "description": "The sentiment will be an icon from font-awesome. It is preferable to have a smiley from the supplied list.",
-                            },
-                            "sentiment_score": {
-                                "type": "integer",
-                                "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
-                            },
-                            "interest_score": {
-                                "type": "integer",
-                                "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
-                            },
-                        },
-                        "required": [
-                            "paragraph",
-                            "sentiment",
-                            "title",
-                            "summary",
-                            "no_bullshit",
-                            "gif_keywords",
-                            "interest_score",
-                        ],
+    set_article_function = {
+        "type": "function",
+        "function": {
+            "name": "set_article_information",
+            "description": "Set all the information about the text provided",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "gif_keywords": {
+                        "type": "string",
+                        "description": "use the sentiment to create a list of human emotions, no markdown, only comma separated list",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "a one line title describing the text",
+                    },
+                    "paragraph": {
+                        "type": "string",
+                        "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "a two to three paragraph summary",
+                    },
+                    "no_bullshit": {
+                        "type": "string",
+                        "description": bullshit,
+                    },
+                    "sentiment": {
+                        "type": "string",
+                        "enum": sentiments_fontawesome,
+                        "description": "The sentiment will be an icon from font-awesome. It is preferable to have a smiley from the supplied list.",
+                    },
+                    "sentiment_score": {
+                        "type": "integer",
+                        "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
+                    },
+                    "interest_score": {
+                        "type": "integer",
+                        "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
+                    },
+                    "classification": {
+                        "type": "string",
+                        "enum": article_classification,
+                        "description": "Article classification, or source",
                     },
                 },
-            }
+                "required": [
+                    "paragraph",
+                    "sentiment",
+                    "title",
+                    "summary",
+                    "no_bullshit",
+                    "gif_keywords",
+                    "interest_score",
+                ],
+            },
+        },
+    }
+
+    set_growth_alert_function = {
+        "type": "function",
+        "function": {
+            "name": "set_growth_alert",
+            "description": "Extremely good news, if the growth of the stock went up more than 10%",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message_growth": {
+                        "type": "string",
+                        "description": "A brief explanation of why.",
+                    },
+                },
+                "required": ["message_growth"],
+            },
+        },
+    }
+
+    set_defcon_alert_function = {
+        "type": "function",
+        "function": {
+            "name": "send_portfolio_alert",
+            "description": "Send a DEFCON-style alert about an article that could affect stock prices based on its importance, like the value is going go up or down.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "defcon_level": {
+                        "type": "integer",
+                        "description": "The DEFCON level of urgency, ranging from 1 (most critical) to 5 (least critical).",
+                    },
+                    "defcon_outcome": {
+                        "type": "string",
+                        "description": "Good or bad outcome",
+                        "enum": ["positive", "negative"],
+                    },
+                    "defcon_alert": {
+                        "type": "string",
+                        "description": "A brief explanation of the alert's significance.",
+                    },
+                    "defcon_ticker": {
+                        "type": "string",
+                        "description": "Ticker to monitor",
+                    },
+                    "actions_required": {
+                        "type": "string",
+                        "description": "The recommended actions for the user in response to the alert.",
+                    },
+                },
+                "required": ["defcon_level", "defcon_alert", "defcon_outcome"],
+            },
+        },
+    }
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": assistant,
+        },
+        {
+            "role": "system",
+            "content": system,
+        },
+        {
+            "role": "user",
+            "content": message,
+        },
+    ]
+
+    response = ollama.chat(
+        model=model,
+        messages=messages,
+        tools=[
+            set_article_function,
         ],
     )
 
     if "tool_calls" not in response["message"]:
-        print("Failed loading json")
+        print_r("Failed loading JSON from result")
         return None
 
+    print_arr = []
     try:
         result = response["message"]["tool_calls"]
         result = lowercase_keys(result)
@@ -444,14 +549,33 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 
         dmp = json.dumps(result, indent=4)
         print(dmp)
-
         d = json.loads(dmp)
 
-        args = d[0]["function"]["arguments"]
+        args = {}
+
+        try:
+            response_growth = ollama.chat(
+                model=model,
+                messages=messages,
+                tools=[
+                    set_defcon_alert_function,
+                ],
+            )
+
+            result = response_growth["message"]["tool_calls"]
+            result = lowercase_keys(result)
+            dmp = json.dumps(result, indent=4)
+            d.extend(json.loads(dmp))
+            print(dmp)
+
+        except Exception as e:
+            print_exception(e, "CRASH")
+
         end_time = time.time()  # End time measurement
 
-        args["model"] = model
-        args["process_time"] = round(end_time - start_time, 2)
+        res = d[0]["function"]["arguments"]
+        res["model"] = model
+        res["process_time"] = round(end_time - start_time, 2)
 
         print(
             f"Time taken to process run_prompt: {end_time - start_time:.2f} seconds"
@@ -467,7 +591,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
     # Get the oldest JSON file
-    print("\n\n")
+    # print("\n\n")
 
     json_file = get_oldest_file(failed_folder)
     if json_file:
@@ -480,7 +604,7 @@ def main(host: str, port: int):
 
     # Process our queue being the first ones more important
     if not json_file:
-        print_e("No JSON files to process.")
+        print_g(">> No JSON files to process. " + str(datetime.now()), in_place=True)
         return
 
     # Load the JSON data
@@ -600,7 +724,7 @@ def main(host: str, port: int):
             console.print(Markdown(result))
 
             for msg in arr_messages:
-                msg['word_count'] = len(word_count(msg['content']))
+                msg["word_count"] = len(word_count(msg["content"]))
 
             data["raw"] = arr_messages
 
