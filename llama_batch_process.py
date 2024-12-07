@@ -313,9 +313,7 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
         response = ollama.chat(
             model=model,
             messages=raw_messages,
-            tools=[
-                raw_tools,
-            ],
+            tools=raw_tools,
         )
 
         if "tool_calls" not in response["message"]:
@@ -578,7 +576,6 @@ def run_prompt(system, assistant, message, model="llama3.1"):
         print_r("Failed loading JSON from result")
         return None
 
-    print_arr = []
     try:
         result = response["message"]["tool_calls"]
         result = lowercase_keys(result)
@@ -708,7 +705,7 @@ def get_generic_messages(data, system, assistant, prompt):
     arr_messages = [
         {
             "role": "user",
-            "content": assistant + system + prompt,
+            "content": str(assistant) + str(system) + str(prompt),
         }
     ]
 
@@ -752,10 +749,20 @@ def main(host: str, port: int):
 
     translation = False
     res_json = None
+    result = None
     message = ""
 
     if "type" in data and data["type"] == "raw_llama":
         print_g(" RUNNING LLAMA IN RAW MODE ")
+
+        res_json = run_prompt_function(data['raw_messages'], data['raw_tools'], "llama3.1")
+        if not res_json:
+            print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+            res_json = run_prompt_function(data['raw_messages'], data['raw_tools'], "llama3.2")
+
+        if not res_json:
+            print_r(" FAILED LLAMA3.2 TOO ")
+
     else:
         if "type" in data:
             if data["type"] == "translation":
@@ -765,7 +772,6 @@ def main(host: str, port: int):
 
         print_g(f"FILE TO PROCESS {json_file}\n")
 
-        result = None
         system = get_generic_system(data)
         assistant, message, call_tools = get_legacy(data)
         arr_messages = get_generic_messages(data, system, assistant, message)
