@@ -13,8 +13,8 @@ json-strong-typing
 pandas
 Pillow
 pre-commit
-pydantic==1.10.13
-pydantic_core==2.18.2
+pydantic
+pydantic_core
 python-dotenv
 setuptools
 tiktoken
@@ -22,9 +22,9 @@ transformers
 ufmt==2.7.0
 usort==1.0.8
 zmq
-llama_models==0.0.2
-llama_toolchain==0.0.2
-llama_agentic_system==0.0.2
+llama_models
+llama_toolchain
+llama_agentic_system
 flask
 colorama
 rich

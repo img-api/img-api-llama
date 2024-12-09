@@ -1,6 +1,8 @@
 import ollama
 
-response = ollama.chat(model='llama3.1', messages=[
+print(str(ollama.show('llama3.3')))
+
+response = ollama.chat(model='llama3.3', messages=[
   {
     'role': 'user',
     'content': 'Why is the sky blue?',

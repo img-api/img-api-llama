@@ -276,7 +276,8 @@ def run_translation(prompt):
         # with open("test_return.json", "w") as f:
         #   json.dump(result, f, indent=4)
 
-        dmp = json.dumps(result, indent=4)
+        dmp = json_serialize_toolcall(result)
+
         d = json.loads(dmp)
 
         print_json(result)
@@ -323,9 +324,8 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
             return None
 
         result = response["message"]["tool_calls"]
-        result = lowercase_keys(result)
 
-        dmp = json.dumps(result, indent=4)
+        dmp = json_serialize_toolcall(result)
         print(dmp)
 
         d = json.loads(dmp)
@@ -341,6 +341,23 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
         print_exception(e, "CRASH PROMPT")
 
     return None
+
+
+def json_serialize_toolcall(result):
+
+    serialz = []
+    for tool in result:
+        f = tool['function']
+        old_format = {
+            'function': {
+                'name': f['name'],
+                'arguments': f['arguments'],
+            }
+        }
+        serialz.append(old_format)
+
+    dmp = json.dumps(serialz, indent=4)
+    return dmp
 
 
 def run_prompt(system, assistant, message, model="llama3.1"):
@@ -586,12 +603,12 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 
     try:
         result = response["message"]["tool_calls"]
-        result = lowercase_keys(result)
 
         # with open("test_return.json", "w") as f:
         #   json.dump(result, f, indent=4)
 
-        dmp = json.dumps(result, indent=4)
+        dmp = json_serialize_toolcall(result)
+
         print(dmp)
         d = json.loads(dmp)
 
@@ -607,8 +624,9 @@ def run_prompt(system, assistant, message, model="llama3.1"):
             )
 
             result = response_growth["message"]["tool_calls"]
-            result = lowercase_keys(result)
-            dmp = json.dumps(result, indent=4)
+
+            dmp = json_serialize_toolcall(result)
+
             d.extend(json.loads(dmp))
             print(dmp)
 
