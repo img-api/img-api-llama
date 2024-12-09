@@ -314,6 +314,8 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
             model=model,
             messages=raw_messages,
             tools=raw_tools,
+            options={"num_ctx": 65536},
+            keep_alive=1,
         )
 
         if "tool_calls" not in response["message"]:
@@ -448,6 +450,10 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                         "type": "string",
                         "description": "use the sentiment to create a list of human emotions, no markdown, only comma separated list",
                     },
+                    "title_clickbait": {
+                        "type": "string",
+                        "description": "Build the most click bait title possible, to show how ridiculous they can get.",
+                    },
                     "title": {
                         "type": "string",
                         "description": "a one line title describing the text",
@@ -488,6 +494,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                     "sentiment",
                     "title",
                     "summary",
+                    "title_clickbait",
                     "no_bullshit",
                     "gif_keywords",
                     "interest_score",
@@ -570,6 +577,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
         tools=[
             set_article_function,
         ],
+        options={"num_ctx": 65536},
     )
 
     if "tool_calls" not in response["message"]:
@@ -644,8 +652,9 @@ def get_generic_system(data):
 
     return system
 
+
 def get_legacy(data):
-    """ Old IMGAPI crazy calls, because we didn't know """
+    """Old IMGAPI crazy calls, because we didn't know"""
     assistant = None
     message = None
     call_tools = True
@@ -670,6 +679,7 @@ def get_legacy(data):
         message = data["message"]
 
     return assistant, message, call_tools
+
 
 def get_generic_messages(data, system, assistant, prompt):
 
@@ -755,10 +765,14 @@ def main(host: str, port: int):
     if "type" in data and data["type"] == "raw_llama":
         print_g(" RUNNING LLAMA IN RAW MODE ")
 
-        res_json = run_prompt_function(data['raw_messages'], data['raw_tools'], "llama3.1")
+        res_json = run_prompt_function(
+            data["raw_messages"], data["raw_tools"], "llama3.1"
+        )
         if not res_json:
             print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
-            res_json = run_prompt_function(data['raw_messages'], data['raw_tools'], "llama3.2")
+            res_json = run_prompt_function(
+                data["raw_messages"], data["raw_tools"], "llama3.2"
+            )
 
         if not res_json:
             print_r(" FAILED LLAMA3.2 TOO ")
@@ -781,6 +795,7 @@ def main(host: str, port: int):
                 response = ollama.chat(
                     model="llama3.1",
                     messages=arr_messages,
+                    options={"num_ctx": 65536},
                 )
                 # Process the message using the run_main function
 

@@ -1,4 +1,4 @@
-curl http://localhost:11434/api/generate -d '{"model": "llama3.1", "keep_alive": -1}'
+curl http://localhost:11434/api/generate -d '{"model": "llama3.3", "keep_alive": -1, "options": { "num_ctx": 16384 }}'
 
 ollama ps
 
