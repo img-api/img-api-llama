@@ -24,6 +24,10 @@ http = urllib3.PoolManager()
 
 init(autoreset=True)
 
+NUM_CTX = 55000
+MODEL = "llama3.1"
+VALID_HOSTNAMES = ["gputop-dev-machine-20240829-103727"]
+
 
 def word_count(text):
     # Split the text into words and normalize to lowercase
@@ -79,7 +83,7 @@ def timeout_handler(signum, frame):
 
 
 signal.signal(signal.SIGALRM, timeout_handler)
-signal.alarm(50)  # Set the alarm for 50 seconds
+signal.alarm(300)  # Set the alarm for 50 seconds
 
 import ollama
 
@@ -91,6 +95,8 @@ processed_folder = "./DATA/PROCESSED"
 ai_crashed = "./DATA/AI_FAILED"
 ai_timeout = "./DATA/AI_TIMEOUT"
 failed_folder = "./DATA/FAILED"
+
+rejected_folder = "./DATA/REJECTED"
 
 # Ensure processed folder exists
 if not os.path.exists(priority_folder):
@@ -110,6 +116,9 @@ if not os.path.exists(failed_folder):
 
 if not os.path.exists(ai_crashed):
     os.makedirs(ai_crashed)
+
+if not os.path.exists(rejected_folder):
+    os.makedirs(rejected_folder)
 
 
 def get_youngest_file(folder):
@@ -236,7 +245,7 @@ def kill_llama():
 def run_translation(prompt):
     start_time = time.time()  # Start time measurement
     response = ollama.chat(
-        model="llama3.1",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         tools=[
             {
@@ -307,7 +316,7 @@ def lowercase_keys(data):
     return data
 
 
-def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
+def run_prompt_function(raw_messages, raw_tools, model=MODEL):
     start_time = time.time()  # Start time measurement
 
     try:
@@ -315,7 +324,7 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
             model=model,
             messages=raw_messages,
             tools=raw_tools,
-            options={"num_ctx": 65536},
+            options={"num_ctx": NUM_CTX},
             keep_alive=1,
         )
 
@@ -347,11 +356,11 @@ def json_serialize_toolcall(result):
 
     serialz = []
     for tool in result:
-        f = tool['function']
+        f = tool["function"]
         old_format = {
-            'function': {
-                'name': f['name'],
-                'arguments': f['arguments'],
+            "function": {
+                "name": f["name"],
+                "arguments": f["arguments"],
             }
         }
         serialz.append(old_format)
@@ -360,7 +369,7 @@ def json_serialize_toolcall(result):
     return dmp
 
 
-def run_prompt(system, assistant, message, model="llama3.1"):
+def run_prompt(system, assistant, message, model=MODEL):
     start_time = time.time()  # Start time measurement
 
     article_classification = [
@@ -487,15 +496,6 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                         "type": "string",
                         "description": bullshit,
                     },
-                    "sentiment": {
-                        "type": "string",
-                        "enum": sentiments_fontawesome,
-                        "description": "The sentiment will be an icon from font-awesome. It is preferable to have a smiley from the supplied list.",
-                    },
-                    "sentiment_score": {
-                        "type": "integer",
-                        "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
-                    },
                     "interest_score": {
                         "type": "integer",
                         "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
@@ -503,15 +503,15 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                     "classification": {
                         "type": "string",
                         "enum": article_classification,
-                        "description": "Article classification, or source",
+                        "description": "Article classification, or source from the enumeration provided",
                     },
                 },
                 "required": [
                     "paragraph",
-                    "sentiment",
                     "title",
                     "summary",
                     "title_clickbait",
+                    "classification",
                     "no_bullshit",
                     "gif_keywords",
                     "interest_score",
@@ -588,13 +588,15 @@ def run_prompt(system, assistant, message, model="llama3.1"):
         },
     ]
 
+    print_g(">> MODEL " + model + " NUM_CTX " + str(NUM_CTX))
+
     response = ollama.chat(
         model=model,
         messages=messages,
         tools=[
             set_article_function,
         ],
-        options={"num_ctx": 65536},
+        options={"num_ctx": NUM_CTX},
     )
 
     if "tool_calls" not in response["message"]:
@@ -620,6 +622,74 @@ def run_prompt(system, assistant, message, model="llama3.1"):
                 messages=messages,
                 tools=[
                     set_defcon_alert_function,
+                ],
+            )
+
+            result = response_growth["message"]["tool_calls"]
+
+            dmp = json_serialize_toolcall(result)
+
+            d.extend(json.loads(dmp))
+            print(dmp)
+
+        except Exception as e:
+            print_exception(e, "CRASH")
+
+        try:
+
+            set_sentiment_icon_function = {
+                "type": "function",
+                "function": {
+                    "name": "set_sentiment_icon",
+                    "description": "Sentiment calculation from the article",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sentiment": {
+                                "type": "string",
+                                "description": "Just sentiment on the article ",
+                            },
+                            "article_icon": {
+                                "type": "string",
+                                "enum": sentiments_fontawesome,
+                                "description": "Select from the enum an icon ",
+                            },
+                            "sentiment_score": {
+                                "type": "integer",
+                                "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
+                            },
+                        },
+                        "required": [
+                            "sentiment",
+                            "article_icon",
+                            "sentiment_score",
+                        ],
+                    },
+                },
+            }
+
+            messages = [
+                {
+                    "role": "assistant",
+                    "content": assistant,
+                },
+                {
+                    "role": "system",
+                    "content": "You are an expert web designer and you have to select icons for each article, provided is the article",
+                },
+                {
+                    "role": "user",
+                    "content": "Find the right icons to represent this article from this list: "
+                    + str(sentiments_fontawesome),
+                },
+            ]
+
+            # print(str(messages))
+            response_growth = ollama.chat(
+                model="llama3.1",
+                messages=messages,
+                tools=[
+                    set_sentiment_icon_function,
                 ],
             )
 
@@ -745,6 +815,8 @@ def main(host: str, port: int):
     # Get the oldest JSON file
     # print("\n\n")
 
+    global MODEL, NUM_CTX
+
     json_file = get_oldest_file(failed_folder)
     if json_file:
         upload_file(json_file)
@@ -780,40 +852,76 @@ def main(host: str, port: int):
     result = None
     message = ""
 
-    if "type" in data and data["type"] == "raw_llama":
-        print_g(" RUNNING LLAMA IN RAW MODE ")
+    my_type = None
+    if "type" in data and data["type"]:
+        my_type = data["type"]
 
-        res_json = run_prompt_function(
-            data["raw_messages"], data["raw_tools"], "llama3.1"
-        )
-        if not res_json:
-            print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+    if 'model' in data:
+        MODEL = data['model']
+
+    if 'num_ctx' in data:
+        NUM_CTX = data['num_ctx']
+
+    if my_type == "raw_llama":
+        print_g(" RUNNING LLAMA IN RAW MODE >> " + str(data["subtype"]))
+
+        if data.get("raw_tools"):
+            print_g(" RAW TOOLS ")
+            print_g(" CHAT MESSAGE >> " + MODEL + " " + str(NUM_CTX))
+
             res_json = run_prompt_function(
-                data["raw_messages"], data["raw_tools"], "llama3.2"
+                data["raw_messages"], data["raw_tools"], MODEL
             )
+            if not res_json:
+                print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+                res_json = run_prompt_function(
+                    data["raw_messages"], data["raw_tools"], "llama3.2"
+                )
 
-        if not res_json:
-            print_r(" FAILED LLAMA3.2 TOO ")
+            if not res_json:
+                print_r(" FAILED LLAMA3.2 TOO ")
+        else:
+            print_g(" CHAT MESSAGE >> " + MODEL + " " + str(NUM_CTX))
+
+            response = ollama.chat(
+                model=MODEL,
+                messages=data["raw_messages"],
+                options={"num_ctx": NUM_CTX},
+            )
+            # Process the message using the run_main function
+
+            result = response["message"]["content"]
 
     else:
-        if "type" in data:
-            if data["type"] == "translation":
-                print_h(" FOUND TRANSLATION ")
-                translation = True
-                res_json = run_translation(message)
+
+        if my_type == "translation":
+            print_h(" FOUND TRANSLATION ")
+            translation = True
+            res_json = run_translation(message)
 
         print_g(f"FILE TO PROCESS {json_file}\n")
 
+        if "hostname" not in data or data["hostname"] not in VALID_HOSTNAMES:
+            print_r(">> REJECTED " + str(data["hostname"]))
+            shutil.move(
+                json_file, os.path.join(rejected_folder, os.path.basename(json_file))
+            )
+            return
+
         system = get_generic_system(data)
+
         assistant, message, call_tools = get_legacy(data)
         arr_messages = get_generic_messages(data, system, assistant, message)
+
+        print_g(">> MODEL " + MODEL)
+        print(str(message))
 
         try:
             if not translation:
                 response = ollama.chat(
-                    model="llama3.1",
+                    model=MODEL,
                     messages=arr_messages,
-                    options={"num_ctx": 65536},
+                    options={"num_ctx": NUM_CTX},
                 )
                 # Process the message using the run_main function
 
@@ -830,7 +938,7 @@ def main(host: str, port: int):
                 data["raw"] = arr_messages
 
             if call_tools:
-                res_json = run_prompt(system, assistant, message, "llama3.1")
+                res_json = run_prompt(system, assistant, message, MODEL)
                 if not res_json:
                     print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
                     res_json = run_prompt(system, assistant, message, "llama3.2")
