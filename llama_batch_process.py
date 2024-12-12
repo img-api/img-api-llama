@@ -1,8 +1,6 @@
 import re
 import os
 import json
-import asyncio
-import threading
 
 import fire
 import shutil
@@ -18,6 +16,9 @@ from collections import Counter
 
 from rich.console import Console
 from rich.markdown import Markdown
+
+from printer import print_b, print_e, print_g, print_r
+
 
 console = Console()
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -39,72 +40,13 @@ def word_count(text):
     word_counts = Counter(words)
     return word_counts
 
-def print_w(text):
-    print(Fore.LIGHTWHITE_EX + text)
-
-def print_b(text):
-    print(Fore.LIGHTBLUE_EX + text)
-
-
-def print_g(text, in_place=False):
-    print(Fore.GREEN + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-def print_r(text, in_place=False):
-    print(Fore.RED + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-line_80 = (
-    "--------------------------------------------------------------------------------"
-)
-
-
-def print_h(text):
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print(Back.GREEN + Fore.BLUE + text.center(80))
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print("\n")
-
-
-def print_e(text):
-    print(Back.RED + line_80)
-    print(Back.RED + text.center(80))
-    print(Back.RED + line_80)
-
-
-def print_json(json_in):
-    print_b(json.dumps(json_in, indent=4))
-
-
-def print_exception(err, text=""):
-    import traceback
-
-    print(Fore.RED + str(err))
-    traceback.print_tb(err.__traceback__)
-
 
 def timeout_handler(signum, frame):
     raise TimeoutError("Program took too long to execute!")
 
 
 signal.signal(signal.SIGALRM, timeout_handler)
-signal.alarm(300)  # Set the alarm for 50 seconds
-
-
-def count_time():
-    global BEXIT
-    """Function to count time and print elapsed seconds."""
-    start_time = time.time()
-    while BEXIT:
-        elapsed_time = int(time.time() - start_time)
-        print_g(f"Elapsed time: {elapsed_time} seconds", in_place=True)
-        time.sleep(1)  # Update every second
-
-
-# Create and start the thread
-# timer_thread = threading.Thread(target=count_time)
-# timer_thread.start()
-
+signal.alarm(50)  # Set the alarm for 50 seconds
 
 import ollama
 
@@ -251,64 +193,7 @@ def kill_llama():
 
 
 def run_translation(prompt):
-    start_time = time.time()  # Start time measurement
-    response = ollama.chat(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        tools=[
-            {
-                "type": "function",
-                "function": {
-                    "name": "set_translation",
-                    "description": "As an expert native and professional translator, transcribe the text adjusted to the locale required.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "translation": {
-                                "type": "string",
-                                "description": "result of the translation",
-                            },
-                            "editor_comments": {
-                                "type": "string",
-                                "description": "Any comments on the transcript",
-                            },
-                        },
-                        "required": [
-                            "translation",
-                            "editor_comments",
-                        ],
-                    },
-                },
-            }
-        ],
-    )
-
-    if "tool_calls" not in response["message"]:
-        print_e("Failed loading json")
-        return None
-
-    try:
-        result = response["message"]["tool_calls"]
-
-        # with open("test_return.json", "w") as f:
-        #   json.dump(result, f, indent=4)
-
-        dmp = json_serialize_toolcall(result)
-
-        d = json.loads(dmp)
-
-        print_json(result)
-
-        end_time = time.time()  # End time measurement
-        print_b(
-            f"\n\nTime taken to process run_prompt: {end_time - start_time:.2f} seconds"
-        )  # Print elapsed time
-
-        return d[0]["function"]["arguments"]["translation"]
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON format Error: {e}")
-
-    return None
+    return run_translation(prompt)
 
 
 def lowercase_keys(data):
@@ -381,7 +266,7 @@ def json_serialize_toolcall(result):
     return dmp
 
 
-def run_prompt(system, assistant, message, model=MODEL):
+def run_prompt(system, assistant, message, model="llama3.1"):
     start_time = time.time()  # Start time measurement
 
     article_classification = [
@@ -508,6 +393,15 @@ def run_prompt(system, assistant, message, model=MODEL):
                         "type": "string",
                         "description": bullshit,
                     },
+                    "sentiment": {
+                        "type": "string",
+                        "enum": sentiments_fontawesome,
+                        "description": "The sentiment will be an icon from font-awesome. It is preferable to have a smiley from the supplied list.",
+                    },
+                    "sentiment_score": {
+                        "type": "integer",
+                        "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
+                    },
                     "interest_score": {
                         "type": "integer",
                         "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
@@ -515,15 +409,15 @@ def run_prompt(system, assistant, message, model=MODEL):
                     "classification": {
                         "type": "string",
                         "enum": article_classification,
-                        "description": "Article classification, or source from the enumeration provided",
+                        "description": "Article classification, or source",
                     },
                 },
                 "required": [
                     "paragraph",
+                    "sentiment",
                     "title",
                     "summary",
                     "title_clickbait",
-                    "classification",
                     "no_bullshit",
                     "gif_keywords",
                     "interest_score",
@@ -600,15 +494,13 @@ def run_prompt(system, assistant, message, model=MODEL):
         },
     ]
 
-    print_g(">> MODEL " + model + " NUM_CTX " + str(NUM_CTX))
-
     response = ollama.chat(
         model=model,
         messages=messages,
         tools=[
             set_article_function,
         ],
-        options={"num_ctx": NUM_CTX},
+        options={"num_ctx": 65536},
     )
 
     if "tool_calls" not in response["message"]:
@@ -634,74 +526,6 @@ def run_prompt(system, assistant, message, model=MODEL):
                 messages=messages,
                 tools=[
                     set_defcon_alert_function,
-                ],
-            )
-
-            result = response_growth["message"]["tool_calls"]
-
-            dmp = json_serialize_toolcall(result)
-
-            d.extend(json.loads(dmp))
-            print(dmp)
-
-        except Exception as e:
-            print_exception(e, "CRASH")
-
-        try:
-
-            set_sentiment_icon_function = {
-                "type": "function",
-                "function": {
-                    "name": "set_sentiment_icon",
-                    "description": "Sentiment calculation from the article",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "sentiment": {
-                                "type": "string",
-                                "description": "Just sentiment on the article ",
-                            },
-                            "article_icon": {
-                                "type": "string",
-                                "enum": sentiments_fontawesome,
-                                "description": "Select from the enum an icon ",
-                            },
-                            "sentiment_score": {
-                                "type": "integer",
-                                "description": "A value from -10 to 10 that represents how much impact will have on the stock. -10 means will go down, 10 bullish",
-                            },
-                        },
-                        "required": [
-                            "sentiment",
-                            "article_icon",
-                            "sentiment_score",
-                        ],
-                    },
-                },
-            }
-
-            messages = [
-                {
-                    "role": "assistant",
-                    "content": assistant,
-                },
-                {
-                    "role": "system",
-                    "content": "You are an expert web designer and you have to select icons for each article, provided is the article",
-                },
-                {
-                    "role": "user",
-                    "content": "Find the right icons to represent this article from this list: "
-                    + str(sentiments_fontawesome),
-                },
-            ]
-
-            # print(str(messages))
-            response_growth = ollama.chat(
-                model="llama3.1",
-                messages=messages,
-                tools=[
-                    set_sentiment_icon_function,
                 ],
             )
 
@@ -940,24 +764,6 @@ def main(host: str, port: int):
 
         try:
             if not translation:
-                response = ollama.chat(
-                    model=MODEL,
-                    messages=arr_messages,
-                    options={"num_ctx": NUM_CTX},
-                )
-                # Process the message using the run_main function
-
-                result = response["message"]["content"]
-                result = re.sub(
-                    r"(?i)summary.*(text|article).*markdown.*facts[:\s]*", "", result
-                )
-
-                console.print(Markdown(result))
-
-                for msg in arr_messages:
-                    msg["word_count"] = len(word_count(msg["content"]))
-
-                data["raw"] = arr_messages
 
             if call_tools:
                 res_json = run_prompt(system, assistant, message, MODEL)
