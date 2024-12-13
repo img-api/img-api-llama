@@ -39,6 +39,8 @@ def word_count(text):
     word_counts = Counter(words)
     return word_counts
 
+def print_w(text):
+    print(Fore.LIGHTWHITE_EX + text)
 
 def print_b(text):
     print(Fore.LIGHTBLUE_EX + text)
@@ -116,12 +118,22 @@ ai_timeout = "./DATA/AI_TIMEOUT"
 failed_folder = "./DATA/FAILED"
 rejected_folder = "./DATA/REJECTED"
 
-PATHS = [source_folder, priority_folder, processed_folder, processing_folder, ai_crashed, ai_timeout, failed_folder, rejected_folder]
+PATHS = [
+    source_folder,
+    priority_folder,
+    processed_folder,
+    processing_folder,
+    ai_crashed,
+    ai_timeout,
+    failed_folder,
+    rejected_folder,
+]
 
 # Ensure processed folder exists
 for folder in PATHS:
     if not os.path.exists(folder):
         os.makedirs(folder)
+
 
 def get_youngest_file(folder):
     """Get the oldest file in the folder."""
@@ -151,7 +163,7 @@ def sort_files_by_ascii_and_date(folder):
     sorted_files = sorted(files, key=file_priority_and_date)
 
     report = " TOTAL FILES " + str(len(sorted_files))
-    print_g(report.rjust(80))
+    print_g(report.rjust(80), in_place=True)
     return sorted_files
 
 
@@ -182,7 +194,7 @@ def callback_url(url, data):
     try:
         response = requests.post(url, json=data, verify=False)
         response.raise_for_status()
-        print_g(f" Callback to {url} {response.status_code}")
+        print_g(f" Callback {url} {response.status_code}")
 
         return True
     except requests.exceptions.RequestException as e:
@@ -198,19 +210,13 @@ def upload_file(json_file):
 
             result_ok = callback_url(data["callback_url"], data)
             if result_ok:
-                shutil.move(
-                    json_file,
-                    os.path.join(processed_folder, os.path.basename(json_file)),
-                )
+                api_file_move(json_file, processed_folder)
             else:
-                shutil.move(
-                    json_file, os.path.join(failed_folder, os.path.basename(json_file))
-                )
+                api_file_move(json_file, failed_folder)
 
-        print(f" Result saved to file: {json_file} \n")
+            print("\n")
 
     except Exception as e:
-
         print(f"Failed to save result to file {json_file}: {e}")
 
         os.remove(json_file)  # Delete the file if it can't be saved
@@ -816,13 +822,19 @@ def get_generic_messages(data, system, assistant, prompt):
     return arr_messages
 
 
+def api_file_move(json_file, new_folder):
+    print_b(" " + os.path.basename(json_file) + " >> " + new_folder)
+    ret = os.path.join(new_folder, os.path.basename(json_file))
+    shutil.move(json_file, ret)
+    return ret
+
+
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
-    # Get the oldest JSON file
-    # print("\n\n")
 
     global MODEL, NUM_CTX
 
+    # Try to process failed uploads, maybe the service is back up
     json_file = get_oldest_file(failed_folder)
     if json_file:
         upload_file(json_file)
@@ -853,10 +865,10 @@ def main(host: str, port: int):
         os.remove(json_file)
         return
 
+    print_w(" " + data['id'])
+
     # Move file to processing folder
-    processing_file = os.path.join(processing_folder, os.path.basename(json_file))
-    shutil.move(json_file, processing_file)
-    json_file = processing_file
+    json_file = api_file_move(json_file, processing_folder)
 
     translation = False
     res_json = None
@@ -874,6 +886,11 @@ def main(host: str, port: int):
 
     if "num_ctx" in data:
         NUM_CTX = data["num_ctx"]
+
+    if "hostname" not in data or data["hostname"] not in VALID_HOSTNAMES:
+        print_r(">> REJECTED " + str(data["hostname"]))
+        api_file_move(json_file, rejected_folder)
+        return
 
     if my_type == "raw_llama":
         print_g(" RUNNING LLAMA IN RAW MODE >> " + str(data["subtype"]))
@@ -912,15 +929,6 @@ def main(host: str, port: int):
             print_h(" FOUND TRANSLATION ")
             translation = True
             res_json = run_translation(message)
-
-        print_g(f"FILE TO PROCESS {json_file}\n")
-
-        if "hostname" not in data or data["hostname"] not in VALID_HOSTNAMES:
-            print_r(">> REJECTED " + str(data["hostname"]))
-            shutil.move(
-                json_file, os.path.join(rejected_folder, os.path.basename(json_file))
-            )
-            return
 
         system = get_generic_system(data)
 
@@ -963,20 +971,15 @@ def main(host: str, port: int):
         except TimeoutError as e:
             print(e)
             print("---------------- TIMEOUT DOING PROCESSING --------------")
-            shutil.move(
-                json_file, os.path.join(ai_timeout, os.path.basename(json_file))
-            )
+            api_file_move(json_file, ai_timeout)
 
         except Exception as e:
-            shutil.move(
-                json_file, os.path.join(ai_crashed, os.path.basename(json_file))
-            )
-
+            api_file_move(json_file, ai_crashed)
             print_r(f"Failed to contact inference {json_file}: {e}")
 
     if not translation and not result and not res_json:
         print_r(f"NO RESULT {json_file}")
-        shutil.move(json_file, os.path.join(ai_crashed, os.path.basename(json_file)))
+        api_file_move(json_file, ai_crashed)
         return
 
     if res_json != None:
