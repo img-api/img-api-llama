@@ -1,12 +1,16 @@
 import json
+import re
 import time
+from collections import Counter
 
 import ollama
+from rich.console import Console
+from rich.markdown import Markdown
 
 from printer import print_e, print_json, print_b, print_exception, print_g, print_r
 
 
-def llama_runner(data):
+console = Console()
 
 
 def run_translation(self, prompt):
@@ -71,7 +75,7 @@ def run_translation(self, prompt):
     return None
 
 
-def translation_fallback(arr_messages):
+def translation_fallback(data, arr_messages):
     response = ollama.chat(
         model="llama3.1",
         messages=arr_messages,
@@ -90,16 +94,6 @@ def translation_fallback(arr_messages):
         msg["word_count"] = len(word_count(msg["content"]))
 
     data["raw"] = arr_messages
-
-
-if call_tools:
-    res_json = run_prompt(system, assistant, message, "llama3.1")
-    if not res_json:
-        print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
-        res_json = run_prompt(system, assistant, message, "llama3.2")
-
-    if not res_json:
-        print_r(" FAILED LLAMA3.2 TOO ")
 
 
 def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
@@ -140,6 +134,7 @@ def run_prompt_function(raw_messages, raw_tools, model="llama3.1"):
 
 def run_prompt(system, assistant, message, model="llama3.1"):
     start_time = time.time()  # Start time measurement
+
 
     article_classification = [
         "Individual Company News",
@@ -427,6 +422,7 @@ def run_prompt(system, assistant, message, model="llama3.1"):
 
     return None
 
+
 def json_serialize_toolcall(result):
 
     serialz = []
@@ -442,3 +438,11 @@ def json_serialize_toolcall(result):
 
     dmp = json.dumps(serialz, indent=4)
     return dmp
+
+
+def word_count(text):
+    # Split the text into words and normalize to lowercase
+    words = text.lower().split()
+    # Count occurrences of each word
+    word_counts = Counter(words)
+    return word_counts

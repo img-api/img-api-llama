@@ -1,4 +1,3 @@
-import re
 import os
 import json
 
@@ -7,17 +6,29 @@ import shutil
 import urllib3
 import warnings
 import requests
-import time
 import signal
 
 from datetime import datetime
 from colorama import Fore, Back, Style, init
-from collections import Counter
 
 from rich.console import Console
-from rich.markdown import Markdown
 
-from printer import print_b, print_e, print_g, print_r
+from printer import print_h, print_e, print_g, print_r
+
+
+class AIServices:
+    OLLAMA = "ollama"
+    VERTEXAI = "vertexai"
+
+
+IMGDATA_AI_SERVICE = os.environ.get("IMGDATA_AI_SERVICE", "ollama")
+
+
+match IMGDATA_AI_SERVICE:
+    case AIServices.OLLAMA:
+        import ollama_service as service
+    case AIServices.VERTEXAI:
+        import vertexai_service as service
 
 
 console = Console()
@@ -163,37 +174,6 @@ def upload_file(json_file):
 
         os.remove(json_file)  # Delete the file if it can't be saved
         print(f"Deleted file due to save error: {json_file}")
-
-
-def kill_llama():
-    import time
-    import psutil
-
-    cmdline_pattern = [
-        "/home/jupyter/LLAMA/venv/bin/python3",
-        "/home/jupyter/LLAMA/venv/bin/llama",
-        "inference",
-        "start",
-    ]
-    for process in psutil.process_iter(["pid", "cmdline"]):
-        cmdline = process.info["cmdline"]
-        if cmdline == cmdline_pattern:
-            print(
-                f"Found llama process: PID = {process.info['pid']}, Command Line: {' '.join(cmdline)}"
-            )
-            os.kill(process.info["pid"], signal.SIGKILL)
-            # process.terminate()  # Gracefully terminate
-            # process.wait()       # Wait for process to be terminated
-
-    count = 5
-    while count > 0:
-        print("..WAIT.. " + str(count))
-        count -= 1
-        time.sleep(10)
-
-
-def run_translation(prompt):
-    return run_translation(prompt)
 
 
 def lowercase_keys(data):
@@ -723,14 +703,14 @@ def main(host: str, port: int):
             print_g(" RAW TOOLS ")
             print_g(" CHAT MESSAGE >> " + MODEL + " " + str(NUM_CTX))
 
-            res_json = run_prompt_function(
-                data["raw_messages"], data["raw_tools"], MODEL
+        res_json = service.run_prompt_function(
+            data["raw_messages"], data["raw_tools"], "llama3.1"
+        )
+        if not res_json:
+            print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
+            res_json = service.run_prompt_function(
+                data["raw_messages"], data["raw_tools"], "llama3.2"
             )
-            if not res_json:
-                print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
-                res_json = run_prompt_function(
-                    data["raw_messages"], data["raw_tools"], "llama3.2"
-                )
 
             if not res_json:
                 print_r(" FAILED LLAMA3.2 TOO ")
@@ -752,7 +732,7 @@ def main(host: str, port: int):
         if my_type == "translation":
             print_h(" FOUND TRANSLATION ")
             translation = True
-            res_json = run_translation(message)
+            res_json = service.run_translation(message)
 
         system = get_generic_system(data)
 
@@ -764,12 +744,13 @@ def main(host: str, port: int):
 
         try:
             if not translation:
+                service.translation_fallback(data, arr_messages)
 
             if call_tools:
-                res_json = run_prompt(system, assistant, message, MODEL)
+                res_json = service.run_prompt(system, assistant, message, "llama3.1")
                 if not res_json:
                     print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
-                    res_json = run_prompt(system, assistant, message, "llama3.2")
+                    res_json = service.run_prompt(system, assistant, message, "llama3.2")
 
                 if not res_json:
                     print_r(" FAILED LLAMA3.2 TOO ")
