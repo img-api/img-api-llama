@@ -109,36 +109,19 @@ import ollama
 # Configurable paths
 source_folder = "./DATA/JSON_TO_PROCESS"
 priority_folder = "./DATA/JSON_TO_PROCESS_PRIORITY"
-
 processed_folder = "./DATA/PROCESSED"
+processing_folder = "./DATA/PROCESSING"
 ai_crashed = "./DATA/AI_FAILED"
 ai_timeout = "./DATA/AI_TIMEOUT"
 failed_folder = "./DATA/FAILED"
-
 rejected_folder = "./DATA/REJECTED"
 
+PATHS = [source_folder, priority_folder, processed_folder, processing_folder, ai_crashed, ai_timeout, failed_folder, rejected_folder]
+
 # Ensure processed folder exists
-if not os.path.exists(priority_folder):
-    os.makedirs(priority_folder)
-
-if not os.path.exists(ai_timeout):
-    os.makedirs(ai_timeout)
-
-if not os.path.exists(source_folder):
-    os.makedirs(source_folder)
-
-if not os.path.exists(processed_folder):
-    os.makedirs(processed_folder)
-
-if not os.path.exists(failed_folder):
-    os.makedirs(failed_folder)
-
-if not os.path.exists(ai_crashed):
-    os.makedirs(ai_crashed)
-
-if not os.path.exists(rejected_folder):
-    os.makedirs(rejected_folder)
-
+for folder in PATHS:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
 def get_youngest_file(folder):
     """Get the oldest file in the folder."""
@@ -869,6 +852,11 @@ def main(host: str, port: int):
         print_e(f"Invalid format in file: {json_file}")
         os.remove(json_file)
         return
+
+    # Move file to processing folder
+    processing_file = os.path.join(processing_folder, os.path.basename(json_file))
+    shutil.move(json_file, processing_file)
+    json_file = processing_file
 
     translation = False
     res_json = None
