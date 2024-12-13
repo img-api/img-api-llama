@@ -59,7 +59,6 @@ def count_files_in_folder(folder_path):
     return file_count
 
 
-@app.route("/")
 @app.route("/api_v1/")
 def hello():
     return (
@@ -67,6 +66,20 @@ def hello():
             {
                 "process": get_files_and_dates_sorted(SAVE_FOLDER),
                 "priority": get_files_and_dates_sorted(PRIORITY_FOLDER),
+                "status": "success",
+            }
+        ),
+        200,
+    )
+
+
+@app.route("/api_v1/count")
+def hello_count():
+    return (
+        jsonify(
+            {
+                "process": count_files_in_folder(SAVE_FOLDER),
+                "priority": count_files_in_folder(PRIORITY_FOLDER),
                 "status": "success",
             }
         ),

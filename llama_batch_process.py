@@ -2,6 +2,7 @@ import re
 import os
 import json
 import asyncio
+import threading
 
 import fire
 import shutil
@@ -27,6 +28,8 @@ init(autoreset=True)
 NUM_CTX = 55000
 MODEL = "llama3.1"
 VALID_HOSTNAMES = ["gputop-dev-machine-20240829-103727"]
+
+BEXIT = False
 
 
 def word_count(text):
@@ -84,6 +87,22 @@ def timeout_handler(signum, frame):
 
 signal.signal(signal.SIGALRM, timeout_handler)
 signal.alarm(300)  # Set the alarm for 50 seconds
+
+
+def count_time():
+    global BEXIT
+    """Function to count time and print elapsed seconds."""
+    start_time = time.time()
+    while BEXIT:
+        elapsed_time = int(time.time() - start_time)
+        print_g(f"Elapsed time: {elapsed_time} seconds", in_place=True)
+        time.sleep(1)  # Update every second
+
+
+# Create and start the thread
+# timer_thread = threading.Thread(target=count_time)
+# timer_thread.start()
+
 
 import ollama
 
@@ -180,11 +199,11 @@ def callback_url(url, data):
     try:
         response = requests.post(url, json=data, verify=False)
         response.raise_for_status()
-        print_g(f"\nCallback to {url} successful: {response.status_code}\n")
+        print_g(f" Callback to {url} {response.status_code}")
 
         return True
     except requests.exceptions.RequestException as e:
-        print_e(f"Failed to callback {url}: {e}")
+        print_e(f" Failed to callback {url}: {e}")
 
     return False
 
@@ -205,7 +224,7 @@ def upload_file(json_file):
                     json_file, os.path.join(failed_folder, os.path.basename(json_file))
                 )
 
-        print(f"Result saved to file: {json_file} \n")
+        print(f" Result saved to file: {json_file} \n")
 
     except Exception as e:
 
@@ -327,6 +346,10 @@ def run_prompt_function(raw_messages, raw_tools, model=MODEL):
             options={"num_ctx": NUM_CTX},
             keep_alive=1,
         )
+
+        if "content" in response["message"]:
+            result = response["message"]["content"]
+            console.print(Markdown(result))
 
         if "tool_calls" not in response["message"]:
             print_r("Failed loading JSON from result")
@@ -852,15 +875,17 @@ def main(host: str, port: int):
     result = None
     message = ""
 
+    start_time = time.time()
+
     my_type = None
     if "type" in data and data["type"]:
         my_type = data["type"]
 
-    if 'model' in data:
-        MODEL = data['model']
+    if "model" in data:
+        MODEL = data["model"]
 
-    if 'num_ctx' in data:
-        NUM_CTX = data['num_ctx']
+    if "num_ctx" in data:
+        NUM_CTX = data["num_ctx"]
 
     if my_type == "raw_llama":
         print_g(" RUNNING LLAMA IN RAW MODE >> " + str(data["subtype"]))
@@ -891,6 +916,7 @@ def main(host: str, port: int):
             # Process the message using the run_main function
 
             result = response["message"]["content"]
+            console.print(Markdown(result))
 
     else:
 
@@ -976,12 +1002,19 @@ def main(host: str, port: int):
 
     # Callback with the updated data
     try:
+        end_time = time.time()
+
+        data["at_process_time_secs"] = round(end_time - start_time, 2)
+        print_b(f" Process Time {end_time - start_time:.2f} secs ")
+
         with open(json_file, "w") as f:
             json.dump(data, f, indent=4)
 
         upload_file(json_file)
     except Exception as e:
         print_e(f"Failed to save result to file {json_file}: {e}")
+
+    BEXIT = True
 
 
 if __name__ == "__main__":
