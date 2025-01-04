@@ -1,5 +1,6 @@
 import re
 import os
+import ast
 import json
 import asyncio
 import threading
@@ -39,8 +40,10 @@ def word_count(text):
     word_counts = Counter(words)
     return word_counts
 
+
 def print_w(text):
     print(Fore.LIGHTWHITE_EX + text)
+
 
 def print_b(text):
     print(Fore.LIGHTBLUE_EX + text)
@@ -118,6 +121,8 @@ ai_timeout = "./DATA/AI_TIMEOUT"
 failed_folder = "./DATA/FAILED"
 rejected_folder = "./DATA/REJECTED"
 
+development_folder = "./DATA/DEV_FOLDER"
+
 PATHS = [
     source_folder,
     priority_folder,
@@ -127,12 +132,70 @@ PATHS = [
     ai_timeout,
     failed_folder,
     rejected_folder,
+    development_folder,
 ]
 
 # Ensure processed folder exists
 for folder in PATHS:
     if not os.path.exists(folder):
         os.makedirs(folder)
+
+
+def fix_array(company_list):
+    """
+    Checks if the input is a string representation of a list or an actual list.
+    Converts it to a proper Python list if necessary.
+
+    Args:
+        company_list (str or list): The input to be checked and fixed.
+
+    Returns:
+        list: A properly formatted Python list.
+    """
+    if not company_list:
+        return []
+
+    if isinstance(company_list, str):
+        try:
+            # Try to safely evaluate the string as a list
+            parsed_list = ast.literal_eval(company_list)
+            if isinstance(parsed_list, list):
+                return parsed_list
+        except (ValueError, SyntaxError):
+            pass
+        # If parsing fails, wrap the string in a list
+        return [company_list]
+
+    elif isinstance(company_list, list):
+        return company_list
+
+    # If neither, raise an error
+    raise TypeError("Input must be a string or a list.")
+
+
+def fix_nested_lists(data):
+    """
+    Recursively traverses a dictionary and fixes any keys ending with '_list'.
+
+    Args:
+        data (dict): The dictionary to be traversed.
+
+    Returns:
+        dict: The dictionary with fixed list formats.
+    """
+    if isinstance(data, list):
+        for obj in data:
+            fix_nested_lists(obj)
+        return obj
+
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key.endswith("_list"):
+                data[key] = fix_array(value)
+                continue
+
+            fix_nested_lists(value)
+    return data
 
 
 def get_youngest_file(folder):
@@ -209,10 +272,18 @@ def upload_file(json_file):
             data = json.load(f)
 
             result_ok = callback_url(data["callback_url"], data)
-            if result_ok:
-                api_file_move(json_file, processed_folder)
+
+            if "dev" in data:
+                if result_ok:
+                    api_file_move(json_file, development_folder)
+                else:
+                    api_file_move(json_file + ".FAILED", development_folder)
+
             else:
-                api_file_move(json_file, failed_folder)
+                if result_ok:
+                    api_file_move(json_file, processed_folder)
+                else:
+                    api_file_move(json_file, failed_folder)
 
             print("\n")
 
@@ -377,7 +448,9 @@ def json_serialize_toolcall(result):
         }
         serialz.append(old_format)
 
+    fix_nested_lists(serialz)
     dmp = json.dumps(serialz, indent=4)
+
     return dmp
 
 
@@ -500,6 +573,14 @@ def run_prompt(system, assistant, message, model=MODEL):
                         "type": "string",
                         "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
                     },
+                    "tickers_list": {
+                        "type": "array",
+                        "description": "A list of the tickers found in the article",
+                    },
+                    "company_list": {
+                        "type": "array",
+                        "description": "A list of the company names found in the article, don't include tickers",
+                    },
                     "summary": {
                         "type": "string",
                         "description": "a two to three paragraph summary",
@@ -510,7 +591,7 @@ def run_prompt(system, assistant, message, model=MODEL):
                     },
                     "interest_score": {
                         "type": "integer",
-                        "description": "How interesting is this text to read if you were a teenager or a millennial, score from 0 to 10.",
+                        "description": "Score from 0 to 10. An interesting article captures the reader's attention and sustains their engagement. It includes the following characteristics, Relevance, Engaging Opening, Clear Purpose, Well-Researched Content.",
                     },
                     "classification": {
                         "type": "string",
@@ -520,6 +601,8 @@ def run_prompt(system, assistant, message, model=MODEL):
                 },
                 "required": [
                     "paragraph",
+                    "tickers_list",
+                    "company_list",
                     "title",
                     "summary",
                     "title_clickbait",
@@ -829,6 +912,36 @@ def api_file_move(json_file, new_folder):
     return ret
 
 
+def api_update_stats(total_time):
+    stats_file = ".stats.json"
+    try:
+        if os.path.isfile(stats_file):
+            with open(stats_file, "r") as f:
+                data = json.load(f)
+
+                data["files_processed"] += 1
+                data["total_time"] += total_time
+                data["average_time"] = round(
+                    data["total_time"] / data["files_processed"], 2
+                )
+        else:
+            data = {
+                "files_processed": 1,
+                "total_time": total_time,
+                "average_time": total_time,
+            }
+
+        with open(stats_file, "w") as f:
+            json.dump(data, f, indent=4)
+
+    except json.JSONDecodeError as e:
+        os.remove(stats_file)  # Delete the file if it's invalid
+        return
+    except Exception as e:
+        print_exception(e, "CRASHED")
+        return
+
+
 def main(host: str, port: int):
     # Loop through the folder and process the oldest JSON file
 
@@ -865,7 +978,7 @@ def main(host: str, port: int):
         os.remove(json_file)
         return
 
-    print_w(" " + data['id'])
+    print_w(" " + data["id"])
 
     # Move file to processing folder
     json_file = api_file_move(json_file, processing_folder)
@@ -994,6 +1107,7 @@ def main(host: str, port: int):
     # Callback with the updated data
     try:
         end_time = time.time()
+        print_w(" " + data["id"])
 
         data["at_process_time_secs"] = round(end_time - start_time, 2)
         print_b(f" Process Time {end_time - start_time:.2f} secs ")
@@ -1002,8 +1116,11 @@ def main(host: str, port: int):
             json.dump(data, f, indent=4)
 
         upload_file(json_file)
+
     except Exception as e:
         print_e(f"Failed to save result to file {json_file}: {e}")
+
+    api_update_stats(time.time() - start_time)
 
     BEXIT = True
 
