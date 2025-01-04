@@ -453,6 +453,68 @@ def json_serialize_toolcall(result):
 
     return dmp
 
+def run_company_tickers_extraction(message,  model):
+
+    set_summary_info = {
+        "type": "function",
+        "function": {
+            "name": "set_summary_info",
+            "description": "Set all the information about the text provided",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tickers_list": {
+                        "type": "array",
+                        "description": "A list of the tickers found in the article",
+                    },
+                    "company_list": {
+                        "type": "array",
+                        "description": "A list of the company names found in the article, don't include tickers",
+                    },
+                },
+                "required": [
+                    "tickers_list",
+                    "company_list",
+                ],
+            },
+        },
+    }
+
+    system = f"You are an expert that knows the stock market and how tickers and companies names are structured."
+    system += "You have great attention to detail and can highlight in text important and relevant information."
+
+    message = "Text to find companies and highlight: " + message
+
+    messages = [
+        {
+            "role": "system",
+            "content": system,
+        },
+        {
+            "role": "user",
+            "content": message,
+        },
+    ]
+
+    try:
+        response_growth = ollama.chat(
+            model=model,
+            messages=messages,
+            tools=[
+                set_summary_info,
+            ],
+        )
+
+        result = response_growth["message"]["tool_calls"]
+
+        dmp = json_serialize_toolcall(result)
+        print(dmp)
+        return json.loads(dmp)
+
+    except Exception as e:
+        print_exception(e, "CRASH")
+
+    return []
 
 def run_prompt(system, assistant, message, model=MODEL):
     start_time = time.time()  # Start time measurement
@@ -540,14 +602,16 @@ def run_prompt(system, assistant, message, model=MODEL):
     ]
 
     bullshit = (
-        "Translate from bullshit to no-bullshit. Be funny and sarcastic. Shorten text."
+        "Translate the article from bullshit to no-bullshit. Be funny and sarcastic. Short text."
     )
 
     gif_prompt = ". No markdown on gif_keywords, find a funny list of keywords appropiate to the text to find an image that represents the text, and meme related, "
 
     system += f"from the following text, clean, {gif_prompt}, if there is a company,"
     system += "evaluate the sentiment in the stock market for the company involved."
-    system += "Write a bullshit to no bullshit field as descripted  \n"
+
+    system += "Write a bullshit to no bullshit field as descripted, you are sophisticated, "
+    system += "don't use phrases like 'Let's get real, folks', 'No Bullshit:', 'Let's cut to the chase', 'TL;DR', 'Translation:' or anything that starts with let's or uses folks.\n"
 
     set_article_function = {
         "type": "function",
@@ -573,11 +637,11 @@ def run_prompt(system, assistant, message, model=MODEL):
                         "type": "string",
                         "description": "a one paragraph, not long text. This should be a small very short summary to display as a note",
                     },
-                    "tickers_list": {
+                    "article_tickers_list": {
                         "type": "array",
                         "description": "A list of the tickers found in the article",
                     },
-                    "company_list": {
+                    "article_company_list": {
                         "type": "array",
                         "description": "A list of the company names found in the article, don't include tickers",
                     },
@@ -601,8 +665,8 @@ def run_prompt(system, assistant, message, model=MODEL):
                 },
                 "required": [
                     "paragraph",
-                    "tickers_list",
-                    "company_list",
+                    "article_tickers_list",
+                    "article_company_list",
                     "title",
                     "summary",
                     "title_clickbait",
@@ -710,6 +774,25 @@ def run_prompt(system, assistant, message, model=MODEL):
         d = json.loads(dmp)
 
         args = {}
+
+        try:
+            response_growth = ollama.chat(
+                model=model,
+                messages=messages,
+                tools=[
+                    set_defcon_alert_function,
+                ],
+            )
+
+            result = response_growth["message"]["tool_calls"]
+
+            dmp = json_serialize_toolcall(result)
+
+            d.extend(json.loads(dmp))
+            print(dmp)
+
+        except Exception as e:
+            print_exception(e, "CRASH")
 
         try:
             response_growth = ollama.chat(
@@ -1073,6 +1156,7 @@ def main(host: str, port: int):
                 data["raw"] = arr_messages
 
             if call_tools:
+
                 res_json = run_prompt(system, assistant, message, MODEL)
                 if not res_json:
                     print_r(" RETRY, MAYBE OUR LLAMA 3.1 WAS LAZY")
@@ -1100,6 +1184,14 @@ def main(host: str, port: int):
         data["dict"] = res_json
         if result:
             data["ai_summary"] = str(result).replace("StepType.inference> ", "")
+
+            try:
+                res = run_company_tickers_extraction(data["ai_summary"], MODEL)
+                if res:
+                    data["dict"].extend(res)
+            except Exception as e:
+                print_exception(e, "CRASH")
+
     else:
         if result:
             data["result"] = str(result).replace("StepType.inference> ", "")
