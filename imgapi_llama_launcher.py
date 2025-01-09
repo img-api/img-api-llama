@@ -12,13 +12,15 @@ app = Flask(__name__)
 app.config.from_json(FLASK_CONFIG_PATH)
 
 
-SAVE_FOLDER = app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS"
-if not os.path.exists(SAVE_FOLDER):
-    os.makedirs(SAVE_FOLDER)
+def create_folder(folder_path):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
 
-PRIORITY_FOLDER = app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY"
-if not os.path.exists(PRIORITY_FOLDER):
-    os.makedirs(PRIORITY_FOLDER)
+
+create_folder(app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS")
+create_folder(app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY")
+create_folder(app.config["VERTEXAI_FOLDER"] or "./DATA/JSON_TO_PROCESS_VERTEXAI")
+
 
 def invalidate_files(folder_path, cutoff_date):
     """
