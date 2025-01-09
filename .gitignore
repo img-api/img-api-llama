@@ -162,3 +162,5 @@ cython_debug/
 
 app/uploads/
 .stats.json
+
+config.json

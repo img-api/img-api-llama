@@ -4,22 +4,8 @@ from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
 
 
-def clean_path(input_path, base_folder):
-    # Remove invalid characters
-    safe_path = os.path.normpath(input_path)  # Normalize the path
-    safe_path = os.path.basename(safe_path)  # Strip to the file name
-
-    # Join with base folder and ensure it stays within it
-    absolute_base = os.path.abspath(base_folder)
-    cleaned_path = os.path.abspath(os.path.join(absolute_base, safe_path))
-
-    if not cleaned_path.startswith(absolute_base):
-        raise ValueError("Invalid path: Attempt to escape base folder")
-
-    return cleaned_path
-
-
 app = Flask(__name__)
+
 
 SAVE_FOLDER = "./DATA/JSON_TO_PROCESS"
 if not os.path.exists(SAVE_FOLDER):
@@ -206,3 +192,18 @@ def upload_json():
             return jsonify({"error": str(e)}), 400
     else:
         return jsonify({"error": "Invalid JSON format"}), 400
+
+
+def clean_path(input_path, base_folder):
+    # Remove invalid characters
+    safe_path = os.path.normpath(input_path)  # Normalize the path
+    safe_path = os.path.basename(safe_path)  # Strip to the file name
+
+    # Join with base folder and ensure it stays within it
+    absolute_base = os.path.abspath(base_folder)
+    cleaned_path = os.path.abspath(os.path.join(absolute_base, safe_path))
+
+    if not cleaned_path.startswith(absolute_base):
+        raise ValueError("Invalid path: Attempt to escape base folder")
+
+    return cleaned_path
