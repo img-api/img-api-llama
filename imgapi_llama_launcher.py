@@ -16,10 +16,12 @@ def create_folder(folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
+    return folder_path
 
-create_folder(app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS")
-create_folder(app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY")
-create_folder(app.config["VERTEXAI_FOLDER"] or "./DATA/JSON_TO_PROCESS_VERTEXAI")
+
+SAVE_FOLDER = create_folder(app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS")
+PRIORITY_FOLDER = create_folder(app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY")
+USER_PROMPT_FOLDER = create_folder(app.config["USER_PROMPT_FOLDER"] or "./DATA/JSON_TO_PROCESS_USER_PROMPT")
 
 
 def invalidate_files(folder_path, cutoff_date):
@@ -168,6 +170,9 @@ def upload_json():
             if "priority" in data:
                 print(" FOUND PRIORITY FILE ")
                 folder = PRIORITY_FOLDER
+
+            if data["type"] == "user_prompt":
+                folder = USER_PROMPT_FOLDER
 
             # Define the filename
 
