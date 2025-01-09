@@ -171,6 +171,7 @@ def upload_json():
                 print(" FOUND PRIORITY FILE ")
                 folder = PRIORITY_FOLDER
 
+            # for chats
             if data["type"] == "user_prompt":
                 folder = USER_PROMPT_FOLDER
 
