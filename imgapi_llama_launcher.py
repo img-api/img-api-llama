@@ -3,15 +3,20 @@ import json
 from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
 
+# Load the configuration file from the environment variable
+FLASK_CONFIG_PATH = os.environ.get("FLASK_CONFIG_PATH", "config.json")
+
 
 app = Flask(__name__)
 
+app.config.from_json(FLASK_CONFIG_PATH)
 
-SAVE_FOLDER = "./DATA/JSON_TO_PROCESS"
+
+SAVE_FOLDER = app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS"
 if not os.path.exists(SAVE_FOLDER):
     os.makedirs(SAVE_FOLDER)
 
-PRIORITY_FOLDER = "./DATA/JSON_TO_PROCESS_PRIORITY"
+PRIORITY_FOLDER = app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY"
 if not os.path.exists(PRIORITY_FOLDER):
     os.makedirs(PRIORITY_FOLDER)
 
