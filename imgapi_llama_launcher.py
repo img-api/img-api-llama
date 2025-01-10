@@ -19,9 +19,9 @@ def create_folder(folder_path):
     return folder_path
 
 
-SAVE_FOLDER = create_folder(app.config["SAVE_FOLDER"] or "./DATA/JSON_TO_PROCESS")
-PRIORITY_FOLDER = create_folder(app.config["PRIORITY_FOLDER"] or "./DATA/JSON_TO_PROCESS_PRIORITY")
-USER_PROMPT_FOLDER = create_folder(app.config["USER_PROMPT_FOLDER"] or "./DATA/JSON_TO_PROCESS_USER_PROMPT")
+SAVE_FOLDER = create_folder(app.config.get("SAVE_FOLDER", "./DATA/JSON_TO_PROCESS"))
+PRIORITY_FOLDER = create_folder(app.config.get("PRIORITY_FOLDER", "./DATA/JSON_TO_PROCESS_PRIORITY"))
+USER_PROMPT_FOLDER = create_folder(app.config.get("USER_PROMPT_FOLDER", "./DATA/JSON_TO_PROCESS_USER_PROMPT"))
 
 
 def invalidate_files(folder_path, cutoff_date):
