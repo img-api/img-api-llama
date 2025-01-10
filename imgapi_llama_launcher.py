@@ -3,31 +3,26 @@ import json
 from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
 
-
-def clean_path(input_path, base_folder):
-    # Remove invalid characters
-    safe_path = os.path.normpath(input_path)  # Normalize the path
-    safe_path = os.path.basename(safe_path)  # Strip to the file name
-
-    # Join with base folder and ensure it stays within it
-    absolute_base = os.path.abspath(base_folder)
-    cleaned_path = os.path.abspath(os.path.join(absolute_base, safe_path))
-
-    if not cleaned_path.startswith(absolute_base):
-        raise ValueError("Invalid path: Attempt to escape base folder")
-
-    return cleaned_path
+# Load the configuration file from the environment variable
+FLASK_CONFIG_PATH = os.environ.get("FLASK_CONFIG_PATH", "config.json")
 
 
 app = Flask(__name__)
 
-SAVE_FOLDER = "./DATA/JSON_TO_PROCESS"
-if not os.path.exists(SAVE_FOLDER):
-    os.makedirs(SAVE_FOLDER)
+app.config.from_json(FLASK_CONFIG_PATH)
 
-PRIORITY_FOLDER = "./DATA/JSON_TO_PROCESS_PRIORITY"
-if not os.path.exists(PRIORITY_FOLDER):
-    os.makedirs(PRIORITY_FOLDER)
+
+def create_folder(folder_path):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    return folder_path
+
+
+SAVE_FOLDER = create_folder(app.config.get("SAVE_FOLDER", "./DATA/JSON_TO_PROCESS"))
+PRIORITY_FOLDER = create_folder(app.config.get("PRIORITY_FOLDER", "./DATA/JSON_TO_PROCESS_PRIORITY"))
+USER_PROMPT_FOLDER = create_folder(app.config.get("USER_PROMPT_FOLDER", "./DATA/JSON_TO_PROCESS_USER_PROMPT"))
+
 
 def invalidate_files(folder_path, cutoff_date):
     """
@@ -176,6 +171,10 @@ def upload_json():
                 print(" FOUND PRIORITY FILE ")
                 folder = PRIORITY_FOLDER
 
+            # for chats
+            if data["type"] == "user_prompt":
+                folder = USER_PROMPT_FOLDER
+
             # Define the filename
 
             fn = data["id"] + "_data.json"
@@ -206,3 +205,18 @@ def upload_json():
             return jsonify({"error": str(e)}), 400
     else:
         return jsonify({"error": "Invalid JSON format"}), 400
+
+
+def clean_path(input_path, base_folder):
+    # Remove invalid characters
+    safe_path = os.path.normpath(input_path)  # Normalize the path
+    safe_path = os.path.basename(safe_path)  # Strip to the file name
+
+    # Join with base folder and ensure it stays within it
+    absolute_base = os.path.abspath(base_folder)
+    cleaned_path = os.path.abspath(os.path.join(absolute_base, safe_path))
+
+    if not cleaned_path.startswith(absolute_base):
+        raise ValueError("Invalid path: Attempt to escape base folder")
+
+    return cleaned_path
