@@ -20,7 +20,7 @@ from collections import Counter
 from rich.console import Console
 from rich.markdown import Markdown
 
-from .files import get_oldest_file, load_json_file
+from .files import get_oldest_file, load_json_file, api_file_move
 
 
 console = Console()
@@ -42,18 +42,6 @@ def word_count(text):
     # Count occurrences of each word
     word_counts = Counter(words)
     return word_counts
-
-
-def print_w(text):
-    print(Fore.LIGHTWHITE_EX + text)
-
-
-def print_g(text, in_place=False):
-    print(Fore.GREEN + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-def print_r(text, in_place=False):
-    print(Fore.RED + text, end="\r" if in_place else "\n", flush=in_place)
 
 
 line_80 = (

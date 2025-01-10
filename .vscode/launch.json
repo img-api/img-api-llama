@@ -20,5 +20,19 @@
                 "lachati.com", "5000",
             ],
         },
+        {
+            "name": "Launch Vertex AI",
+            "type": "python",
+            "request": "launch",
+            "program": "vertexai_batch_process.py",
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "purpose": ["debug-in-terminal"],
+            "env": {
+                "PYTHONPATH": "${cwd}"
+            },
+            "args": [],
+        },
     ]
 }

@@ -6,6 +6,9 @@ import os
 import shutil
 
 from colorama import Fore, Back, Style, init
+import requests
+
+from .printer import print_b,print_g, print_r, line_80
 
 
 def get_oldest_file(folder):
@@ -69,21 +72,23 @@ def api_file_move(json_file, new_folder):
     return ret
 
 
+# TODO: it doesn't belong here as it uses requests, should be refactored
+def callback_url(url, data):
+    """Send a callback to the URL with the processed data."""
+    try:
+        response = requests.post(url, json=data, verify=False)
+        response.raise_for_status()
+        print_g(f" Callback {url} {response.status_code}")
+
+        return True
+    except requests.exceptions.RequestException as e:
+        print_e(f" Failed to callback {url}: {e}")
+
+    return False
+
+
 # TODO: move to a common library
 def print_e(text):
     print(Back.RED + line_80)
     print(Back.RED + text.center(80))
     print(Back.RED + line_80)
-
-
-def print_r(text, in_place=False):
-    print(Fore.RED + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-def print_b(text):
-    print(Fore.LIGHTBLUE_EX + text)
-
-
-line_80 = (
-    "--------------------------------------------------------------------------------"
-)
