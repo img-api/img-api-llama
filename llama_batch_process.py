@@ -20,7 +20,9 @@ from collections import Counter
 from rich.console import Console
 from rich.markdown import Markdown
 
-from .files import get_oldest_file, load_json_file, api_file_move
+from .files import get_oldest_file, load_json_file, api_file_move, upload_file
+from .paths import PATHS, source_folder, processing_folder, failed_folder, priority_folder, rejected_folder
+from .printer import print_b, print_g, print_r, print_w, print_e, print_exception, print_json, print_h, line_80
 
 
 console = Console()
@@ -42,35 +44,6 @@ def word_count(text):
     # Count occurrences of each word
     word_counts = Counter(words)
     return word_counts
-
-
-line_80 = (
-    "--------------------------------------------------------------------------------"
-)
-
-
-def print_h(text):
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print(Back.GREEN + Fore.BLUE + text.center(80))
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print("\n")
-
-
-def print_e(text):
-    print(Back.RED + line_80)
-    print(Back.RED + text.center(80))
-    print(Back.RED + line_80)
-
-
-def print_json(json_in):
-    print_b(json.dumps(json_in, indent=4))
-
-
-def print_exception(err, text=""):
-    import traceback
-
-    print(Fore.RED + str(err))
-    traceback.print_tb(err.__traceback__)
 
 
 def timeout_handler(signum, frame):
@@ -98,29 +71,6 @@ def count_time():
 
 import ollama
 
-# Configurable paths
-source_folder = "./DATA/JSON_TO_PROCESS"
-priority_folder = "./DATA/JSON_TO_PROCESS_PRIORITY"
-processed_folder = "./DATA/PROCESSED"
-processing_folder = "./DATA/PROCESSING"
-ai_crashed = "./DATA/AI_FAILED"
-ai_timeout = "./DATA/AI_TIMEOUT"
-failed_folder = "./DATA/FAILED"
-rejected_folder = "./DATA/REJECTED"
-
-development_folder = "./DATA/DEV_FOLDER"
-
-PATHS = [
-    source_folder,
-    priority_folder,
-    processed_folder,
-    processing_folder,
-    ai_crashed,
-    ai_timeout,
-    failed_folder,
-    rejected_folder,
-    development_folder,
-]
 
 # Ensure processed folder exists
 for folder in PATHS:

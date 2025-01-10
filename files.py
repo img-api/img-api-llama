@@ -9,6 +9,7 @@ from colorama import Fore, Back, Style, init
 import requests
 
 from .printer import print_b,print_g, print_r, line_80
+from .paths import development_folder, failed_folder, processed_folder
 
 
 def get_oldest_file(folder):
