@@ -7,7 +7,7 @@ import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.oauth2 import service_account
 
-from .files import get_oldest_file, load_json_file
+from files import get_oldest_file, load_json_file
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/dev/vertexai-credentials.json"
