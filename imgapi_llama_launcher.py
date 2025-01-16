@@ -9,7 +9,7 @@ FLASK_CONFIG_PATH = os.environ.get("FLASK_CONFIG_PATH", "config.json")
 
 app = Flask(__name__)
 
-app.config.from_json(FLASK_CONFIG_PATH)
+app.config.from_file(FLASK_CONFIG_PATH, load=json.load)
 
 
 def create_folder(folder_path):
