@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from .files import get_oldest_file, load_json_file, api_file_move, upload_file
-from .paths import PATHS, source_folder, processing_folder, failed_folder, priority_folder, rejected_folder
+from .paths import PATHS, source_folder, processing_folder, failed_folder, priority_folder, rejected_folder, ai_crashed, ai_timeout
 from .printer import print_b, print_g, print_r, print_w, print_e, print_exception, print_json, print_h, line_80
 
 
