@@ -20,6 +20,11 @@ from collections import Counter
 from rich.console import Console
 from rich.markdown import Markdown
 
+from .files import get_oldest_file, load_json_file, api_file_move, upload_file
+from .paths import PATHS, source_folder, processing_folder, failed_folder, priority_folder, rejected_folder, ai_crashed, ai_timeout
+from .printer import print_b, print_g, print_r, print_w, print_e, print_exception, print_json, print_h, line_80
+
+
 console = Console()
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
 http = urllib3.PoolManager()
@@ -39,51 +44,6 @@ def word_count(text):
     # Count occurrences of each word
     word_counts = Counter(words)
     return word_counts
-
-
-def print_w(text):
-    print(Fore.LIGHTWHITE_EX + text)
-
-
-def print_b(text):
-    print(Fore.LIGHTBLUE_EX + text)
-
-
-def print_g(text, in_place=False):
-    print(Fore.GREEN + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-def print_r(text, in_place=False):
-    print(Fore.RED + text, end="\r" if in_place else "\n", flush=in_place)
-
-
-line_80 = (
-    "--------------------------------------------------------------------------------"
-)
-
-
-def print_h(text):
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print(Back.GREEN + Fore.BLUE + text.center(80))
-    print(Back.GREEN + Fore.BLUE + line_80)
-    print("\n")
-
-
-def print_e(text):
-    print(Back.RED + line_80)
-    print(Back.RED + text.center(80))
-    print(Back.RED + line_80)
-
-
-def print_json(json_in):
-    print_b(json.dumps(json_in, indent=4))
-
-
-def print_exception(err, text=""):
-    import traceback
-
-    print(Fore.RED + str(err))
-    traceback.print_tb(err.__traceback__)
 
 
 def timeout_handler(signum, frame):
@@ -111,29 +71,6 @@ def count_time():
 
 import ollama
 
-# Configurable paths
-source_folder = "./DATA/JSON_TO_PROCESS"
-priority_folder = "./DATA/JSON_TO_PROCESS_PRIORITY"
-processed_folder = "./DATA/PROCESSED"
-processing_folder = "./DATA/PROCESSING"
-ai_crashed = "./DATA/AI_FAILED"
-ai_timeout = "./DATA/AI_TIMEOUT"
-failed_folder = "./DATA/FAILED"
-rejected_folder = "./DATA/REJECTED"
-
-development_folder = "./DATA/DEV_FOLDER"
-
-PATHS = [
-    source_folder,
-    priority_folder,
-    processed_folder,
-    processing_folder,
-    ai_crashed,
-    ai_timeout,
-    failed_folder,
-    rejected_folder,
-    development_folder,
-]
 
 # Ensure processed folder exists
 for folder in PATHS:
@@ -238,60 +175,9 @@ def get_oldest_file_by_priority(folder):
     return arr[0]
 
 
-def get_oldest_file(folder):
-    """Get the oldest file in the folder."""
-    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".json")]
-    if not files:
-        return None
-    oldest_file = min(files, key=os.path.getctime)
-    return oldest_file
-
-
 def update_file_timestamp(filepath):
     """Touch the file to update its timestamp, making it the 'youngest'."""
     os.utime(filepath, None)
-
-
-def callback_url(url, data):
-    """Send a callback to the URL with the processed data."""
-    try:
-        response = requests.post(url, json=data, verify=False)
-        response.raise_for_status()
-        print_g(f" Callback {url} {response.status_code}")
-
-        return True
-    except requests.exceptions.RequestException as e:
-        print_e(f" Failed to callback {url}: {e}")
-
-    return False
-
-
-def upload_file(json_file):
-    try:
-        with open(json_file, "r") as f:
-            data = json.load(f)
-
-            result_ok = callback_url(data["callback_url"], data)
-
-            if "dev" in data:
-                if result_ok:
-                    api_file_move(json_file, development_folder)
-                else:
-                    api_file_move(json_file + ".FAILED", development_folder)
-
-            else:
-                if result_ok:
-                    api_file_move(json_file, processed_folder)
-                else:
-                    api_file_move(json_file, failed_folder)
-
-            print("\n")
-
-    except Exception as e:
-        print(f"Failed to save result to file {json_file}: {e}")
-
-        os.remove(json_file)  # Delete the file if it can't be saved
-        print(f"Deleted file due to save error: {json_file}")
 
 
 def kill_llama():
@@ -903,20 +789,15 @@ def get_generic_system(data):
     if "system" in data:
         return data["system"]
 
-    system = ""
-    system += "Your name is TOTHEMOON, you are an expert stock analyst ,"
-    system += (
-        "An expert stock market analyst has not only a good education background, "
-    )
-    system += (
-        "extensive experience, but also advanced analytical and technical skills. "
-    )
-    system += "we are regulated and we can provide financial advise."
-    system += "Don't metion anything about the prompt on the message or function calls we might do,"
-    system += "You will get sometimes raw articles ignore messages about cookies and other irrelevant information."
-    system += "Use markdown to highlight important parts on the texts."
-
-    return system
+    return """
+    Your name is TOTHEMOON, you are an expert stock analyst ,
+        An expert stock market analyst has not only a good education background,
+        extensive experience, but also advanced analytical and technical skills.
+        We are regulated and we can provide financial advise.
+        Don't metion anything about the prompt on the message or function calls we might do,
+        You will get sometimes raw articles ignore messages about cookies and other irrelevant information.
+        Use markdown to highlight important parts on the texts.
+    """
 
 
 def get_legacy(data):
@@ -988,13 +869,6 @@ def get_generic_messages(data, system, assistant, prompt):
     return arr_messages
 
 
-def api_file_move(json_file, new_folder):
-    print_b(" " + os.path.basename(json_file) + " >> " + new_folder)
-    ret = os.path.join(new_folder, os.path.basename(json_file))
-    shutil.move(json_file, ret)
-    return ret
-
-
 def api_update_stats(total_time):
     stats_file = ".stats.json"
     try:
@@ -1046,20 +920,7 @@ def main(host: str, port: int):
         return
 
     # Load the JSON data
-    try:
-        with open(json_file, "r") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        print_e(f"Invalid JSON format in file: {json_file}. Error: {e}")
-        os.remove(json_file)  # Delete the file if it's invalid
-        print_r(f"Deleted invalid file: {json_file}")
-        return
-
-    # Check the expected format
-    if "id" not in data or "callback_url" not in data:
-        print_e(f"Invalid format in file: {json_file}")
-        os.remove(json_file)
-        return
+    data = load_json_file(json_file)
 
     print_w(" " + data["id"])
 
